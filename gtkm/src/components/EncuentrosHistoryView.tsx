@@ -118,7 +118,7 @@ export const EncuentrosHistoryView: React.FC<EncuentrosHistoryViewProps> = ({
             {selectedEncuentro.title}
           </h1>
           <p className="text-xs sm:text-sm text-purple-300 mt-1">
-            {selectedEncuentro.players.length} participantes • {selectedEncuentro.allAnswers.length} respuestas registradas
+            {selectedEncuentro.players.length} participantes • {selectedEncuentro.allAnswers.length} respuestas registradas • {selectedEncuentro.guessWhoPercentage ?? 70}% en Guess Who
           </p>
 
           {/* Sub-Tabs: Podio vs Respuestas vs Rondas */}
@@ -630,6 +630,8 @@ export const EncuentrosHistoryView: React.FC<EncuentrosHistoryViewProps> = ({
                       </span>
                       <span>•</span>
                       <span>{enc.allAnswers.length} respuestas guardadas</span>
+                      <span>•</span>
+                      <span className="text-pink-300 font-bold">{enc.guessWhoPercentage ?? 70}% Guess Who</span>
                     </div>
                   </div>
                 </div>
