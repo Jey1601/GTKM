@@ -33,6 +33,7 @@
         "guessWhoRounds": { "type": "array", "description": "Rondas seleccionadas aleatoriamente (70%)" },
         "currentRoundIndex": { "type": "number", "description": "Índice de la ronda en curso" },
         "totalSelectedRounds": { "type": "number", "description": "Total de rondas seleccionadas" },
+        "guessWhoPercentage": { "type": "number", "description": "Porcentaje parametrizable de respuestas seleccionadas para Guess Who (ej. 70)" },
         "createdAt": { "type": "number", "description": "Timestamp de creación" },
         "updatedAt": { "type": "number", "description": "Timestamp de última modificación" }
       },
@@ -54,6 +55,7 @@
         "guessWhoRounds": { "type": "array", "description": "Rondas jugadas de Guess Who" },
         "currentRoundIndex": { "type": "number", "description": "Índice final" },
         "totalSelectedRounds": { "type": "number", "description": "Total de rondas" },
+        "guessWhoPercentage": { "type": "number", "description": "Porcentaje parametrizable de respuestas seleccionadas para Guess Who (ej. 70)" },
         "createdAt": { "type": "number", "description": "Timestamp de creación" },
         "updatedAt": { "type": "number", "description": "Timestamp de archivo" }
       },
