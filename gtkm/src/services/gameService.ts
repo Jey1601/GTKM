@@ -187,7 +187,8 @@ export function generateRoomCode(): string {
 export function createEncuentro(
   hostUser: User, 
   packId: string = 'pack_amigos',
-  customQuestionTexts?: string[]
+  customQuestionTexts?: string[],
+  guessWhoPercentage: number = 70
 ): Encuentro {
   const code = generateRoomCode();
   const selectedPack = DEFAULT_QUESTION_PACKS.find(p => p.id === packId) || DEFAULT_QUESTION_PACKS[0];
@@ -216,6 +217,8 @@ export function createEncuentro(
     hasAnsweredAll: false
   };
 
+  const clampedPercentage = Math.min(100, Math.max(10, Math.round(guessWhoPercentage || 70)));
+
   const nuevoEncuentro: Encuentro = {
     id: `enc_${Date.now()}_${code}`,
     code,
@@ -228,12 +231,34 @@ export function createEncuentro(
     guessWhoRounds: [],
     currentRoundIndex: 0,
     totalSelectedRounds: 0,
+    guessWhoPercentage: clampedPercentage,
     createdAt: Date.now(),
     updatedAt: Date.now()
   };
 
   saveEncuentro(nuevoEncuentro);
   return nuevoEncuentro;
+}
+
+/**
+ * Actualiza configuraciones de la sala antes de iniciar (ej. porcentaje de Guess Who)
+ */
+export function updateEncuentroSettings(
+  encuentroId: string, 
+  settings: { guessWhoPercentage?: number; title?: string }
+): Encuentro | null {
+  const encuentro = getEncuentro(encuentroId);
+  if (!encuentro) return null;
+
+  if (settings.guessWhoPercentage !== undefined) {
+    encuentro.guessWhoPercentage = Math.min(100, Math.max(10, Math.round(settings.guessWhoPercentage)));
+  }
+  if (settings.title) {
+    encuentro.title = settings.title.trim();
+  }
+
+  saveEncuentro(encuentro);
+  return encuentro;
 }
 
 /**
@@ -355,17 +380,21 @@ export function startGame(encuentroId: string): Encuentro | null {
 
 /**
  * LÓGICA PRINCIPAL DEL MODO "GUESS WHO" (ADIVINA QUIÉN):
- * "Una vez todos contestan, el sistema selecciona aleatoriamente el 70%
- *  del total de preguntas y respuestas ingresadas en esa sesión."
+ * "Una vez todos contestan, el sistema selecciona aleatoriamente el porcentaje configurado
+ *  (por defecto 70%, o parametrizado por el anfitrión para cada encuentro) del total de preguntas y respuestas ingresadas."
  */
-export function calculateAndBuildGuessWhoRounds(allAnswers: PlayerAnswer[]): GuessWhoRound[] {
+export function calculateAndBuildGuessWhoRounds(
+  allAnswers: PlayerAnswer[], 
+  percentage: number = 70
+): GuessWhoRound[] {
   if (!allAnswers || allAnswers.length === 0) return [];
 
   // 1. Barajar respuestas aleatoriamente (Fisher-Yates)
   const shuffled = [...allAnswers].sort(() => Math.random() - 0.5);
 
-  // 2. Calcular exactamente el 70% del total (mínimo 1 ronda)
-  const targetCount = Math.max(1, Math.ceil(allAnswers.length * 0.7));
+  // 2. Calcular exactamente el porcentaje del total parametrizado (mínimo 1 ronda)
+  const validPercentage = Math.min(100, Math.max(10, percentage || 70));
+  const targetCount = Math.max(1, Math.ceil(allAnswers.length * (validPercentage / 100)));
   const selectedSubset = shuffled.slice(0, targetCount);
 
   // 3. Convertir en rondas de Guess Who
@@ -423,8 +452,11 @@ export function submitPlayerAnswers(
   const allFinished = encuentro.players.every(p => p.hasAnsweredAll);
 
   if (allFinished) {
-    // Generar el 70% de rondas de Guess Who
-    encuentro.guessWhoRounds = calculateAndBuildGuessWhoRounds(encuentro.allAnswers);
+    // Generar rondas de Guess Who según el porcentaje parametrizado para este encuentro
+    encuentro.guessWhoRounds = calculateAndBuildGuessWhoRounds(
+      encuentro.allAnswers, 
+      encuentro.guessWhoPercentage ?? 70
+    );
     encuentro.totalSelectedRounds = encuentro.guessWhoRounds.length;
     encuentro.currentRoundIndex = 0;
     encuentro.status = 'voting';
@@ -855,6 +887,7 @@ export function seedInitialHistoryIfEmpty(): void {
       guessWhoRounds: sampleRounds,
       currentRoundIndex: 1,
       totalSelectedRounds: 2,
+      guessWhoPercentage: 70,
       createdAt: Date.now() - 1000 * 60 * 60 * 24 * 2, // 2 days ago
       updatedAt: Date.now() - 1000 * 60 * 60 * 24 * 2
     };
