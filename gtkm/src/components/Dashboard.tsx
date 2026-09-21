@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { PlusCircle, LogIn, Sparkles, Edit3, HelpCircle, Flame, CheckCircle, Dice5, Share2 } from 'lucide-react';
+import { PlusCircle, LogIn, Sparkles, Edit3, HelpCircle, Flame, CheckCircle, Dice5, Share2, Sliders } from 'lucide-react';
 import { User, Encuentro } from '../types';
 import { createEncuentro, joinEncuentro } from '../services/gameService';
 import { DEFAULT_QUESTION_PACKS } from '../data/questions';
@@ -24,6 +24,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [selectedPackId, setSelectedPackId] = useState('pack_amigos');
   const [customQuestionsInput, setCustomQuestionsInput] = useState('');
   const [useCustomQuestions, setUseCustomQuestions] = useState(false);
+  const [guessWhoPercentage, setGuessWhoPercentage] = useState<number>(70);
 
   const [isJoining, setIsJoining] = useState(false);
 
@@ -75,7 +76,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       }
     }
 
-    const nuevoEncuentro = createEncuentro(currentUser, selectedPackId, customQuestionsList);
+    const nuevoEncuentro = createEncuentro(currentUser, selectedPackId, customQuestionsList, guessWhoPercentage);
     sounds.playSuccess();
     onEnterEncuentro(nuevoEncuentro);
   };
@@ -286,6 +287,73 @@ export const Dashboard: React.FC<DashboardProps> = ({
               )}
             </div>
 
+            {/* Selector de porcentaje de preguntas para Guess Who */}
+            <div className="mb-5 p-4 rounded-2xl bg-[#120e28]/80 border border-purple-500/30">
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs font-bold uppercase tracking-wider text-pink-300 flex items-center gap-1.5">
+                  <Sliders className="w-3.5 h-3.5 text-pink-400" />
+                  <span>% Preguntas en Guess Who:</span>
+                </label>
+                <span className="px-2.5 py-0.5 rounded-full bg-pink-500/20 text-pink-300 font-black text-xs border border-pink-500/30">
+                  {guessWhoPercentage}%
+                </span>
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <span className="text-[11px] font-bold text-purple-400">20%</span>
+                  <input
+                    type="range"
+                    min={20}
+                    max={100}
+                    step={5}
+                    value={guessWhoPercentage}
+                    onChange={e => {
+                      setGuessWhoPercentage(Number(e.target.value));
+                    }}
+                    className="w-full accent-[#ff007a] cursor-pointer h-2 bg-purple-950 rounded-lg"
+                  />
+                  <span className="text-[11px] font-bold text-pink-300">100%</span>
+                </div>
+
+                {/* Botones de preajuste rápido */}
+                <div className="grid grid-cols-3 gap-1.5 pt-1">
+                  {[
+                    { pct: 50, label: '50% Rápida', desc: '1 de cada 2' },
+                    { pct: 70, label: '70% Clásica', desc: 'Equilibrada' },
+                    { pct: 100, label: '100% Completa', desc: 'Todas las rtas' }
+                  ].map(preset => (
+                    <button
+                      key={preset.pct}
+                      type="button"
+                      onClick={() => {
+                        sounds.playPop();
+                        setGuessWhoPercentage(preset.pct);
+                      }}
+                      className={`py-1.5 px-2 rounded-xl text-center text-xs font-bold border transition ${
+                        guessWhoPercentage === preset.pct
+                          ? 'bg-[#ff007a]/30 border-[#ff007a] text-white shadow-sm'
+                          : 'bg-white/5 border-white/10 text-purple-300 hover:bg-white/10'
+                      }`}
+                    >
+                      <div>{preset.label}</div>
+                      <div className="text-[9px] opacity-75 font-normal">{preset.desc}</div>
+                    </button>
+                  ))}
+                </div>
+
+                <p className="text-[11px] text-purple-300/80 leading-tight">
+                  {guessWhoPercentage === 100 ? (
+                    <span>🔥 <b className="text-white">Modo Intenso:</b> Se adivinarán absolutamente todas las respuestas de los participantes.</span>
+                  ) : guessWhoPercentage <= 50 ? (
+                    <span>⚡ <b className="text-white">Modo Dinámico:</b> Solo se adivinará la mitad de las respuestas para una partida más ágil.</span>
+                  ) : (
+                    <span>🎲 <b className="text-white">Modo Equilibrado:</b> Se seleccionará al azar el {guessWhoPercentage}% de respuestas dejadas por los amigos.</span>
+                  )}
+                </p>
+              </div>
+            </div>
+
             <button
               id="btn-create-encounter"
               type="button"
@@ -298,8 +366,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </div>
 
           <div className="mt-6 pt-4 border-t border-white/10 text-xs text-purple-300/70 flex items-center justify-between">
-            <span>Regla Guess Who:</span>
-            <span className="font-bold text-pink-300">70% de respuestas al azar 🎲</span>
+            <span>Regla Guess Who configurada:</span>
+            <span className="font-bold text-pink-300">{guessWhoPercentage}% de respuestas al azar 🎲</span>
           </div>
         </div>
       </div>
