@@ -1,0 +1,56 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Colección de Usuarios y Avatares
+    match /users/{userId} {
+      allow get: if isValidId(userId);
+      allow list: if true;
+      allow create, update: if isValidId(userId)
+        && incoming().name is string && incoming().name.size() > 0 && incoming().name.size() <= 80
+        && incoming().nickname is string && incoming().nickname.size() > 0 && incoming().nickname.size() <= 40
+        && incoming().avatarDataUrl is string;
+      allow delete: if false;
+    }
+
+    // Colección de Encuentros / Salas Activas
+    match /encuentros/{code} {
+      allow get: if isValidId(code);
+      allow list: if true;
+      allow create, update: if isValidId(code)
+        && incoming().code is string && incoming().code.size() <= 10
+        && incoming().title is string && incoming().title.size() <= 120
+        && incoming().status in ['lobby', 'answering', 'voting', 'reveal', 'leaderboard', 'history'];
+      allow delete: if isValidId(code);
+    }
+
+    // Colección de Historial de Encuentros Completados
+    match /history/{historyId} {
+      allow get: if isValidId(historyId);
+      allow list: if true;
+      allow create, update: if isValidId(historyId)
+        && incoming().code is string
+        && incoming().title is string;
+      allow delete: if isValidId(historyId);
+    }
+  }
+}

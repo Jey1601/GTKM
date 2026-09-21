@@ -1,0 +1,77 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Usuario registrado del juego con su avatar dibujado",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "ID del usuario" },
+        "name": { "type": "string", "maxLength": 80, "description": "Nombre completo" },
+        "nickname": { "type": "string", "maxLength": 40, "pattern": "^[a-zA-Z0-9_]+$", "description": "Nickname único" },
+        "avatarDataUrl": { "type": "string", "description": "Avatar en formato DataURL o SVG" },
+        "createdAt": { "type": "number", "description": "Timestamp de creación" }
+      },
+      "required": ["id", "name", "nickname", "avatarDataUrl", "createdAt"]
+    },
+    "Encuentro": {
+      "title": "Encuentro",
+      "description": "Sala y estado activo de la partida de GetToKnowMe",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Identificador de la sala" },
+        "code": { "type": "string", "maxLength": 10, "pattern": "^[A-Z0-9]+$", "description": "Código de 6 letras para unirse" },
+        "hostId": { "type": "string", "description": "ID del anfitrión" },
+        "title": { "type": "string", "maxLength": 120, "description": "Título del encuentro" },
+        "status": { 
+          "type": "string", 
+          "enum": ["lobby", "answering", "voting", "reveal", "leaderboard", "history"],
+          "description": "Estado del flujo de juego" 
+        },
+        "players": { "type": "array", "description": "Lista de jugadores conectados" },
+        "questions": { "type": "array", "description": "Preguntas seleccionadas para la sesión" },
+        "allAnswers": { "type": "array", "description": "Respuestas recopiladas de los participantes" },
+        "guessWhoRounds": { "type": "array", "description": "Rondas seleccionadas aleatoriamente (70%)" },
+        "currentRoundIndex": { "type": "number", "description": "Índice de la ronda en curso" },
+        "totalSelectedRounds": { "type": "number", "description": "Total de rondas seleccionadas" },
+        "createdAt": { "type": "number", "description": "Timestamp de creación" },
+        "updatedAt": { "type": "number", "description": "Timestamp de última modificación" }
+      },
+      "required": ["id", "code", "hostId", "title", "status", "players", "questions", "allAnswers", "guessWhoRounds", "currentRoundIndex", "totalSelectedRounds", "createdAt", "updatedAt"]
+    },
+    "CompletedEncuentro": {
+      "title": "CompletedEncuentro",
+      "description": "Encuentro terminado guardado en el archivo histórico",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "ID del encuentro histórico" },
+        "code": { "type": "string", "description": "Código de la sala" },
+        "hostId": { "type": "string", "description": "ID del anfitrión" },
+        "title": { "type": "string", "description": "Título del encuentro" },
+        "status": { "type": "string", "description": "Estado finalizado" },
+        "players": { "type": "array", "description": "Lista de jugadores y puntuaciones finales" },
+        "questions": { "type": "array", "description": "Preguntas de la sesión" },
+        "allAnswers": { "type": "array", "description": "Todas las respuestas de los participantes" },
+        "guessWhoRounds": { "type": "array", "description": "Rondas jugadas de Guess Who" },
+        "currentRoundIndex": { "type": "number", "description": "Índice final" },
+        "totalSelectedRounds": { "type": "number", "description": "Total de rondas" },
+        "createdAt": { "type": "number", "description": "Timestamp de creación" },
+        "updatedAt": { "type": "number", "description": "Timestamp de archivo" }
+      },
+      "required": ["id", "code", "hostId", "title", "status", "players", "questions", "allAnswers", "guessWhoRounds", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Perfiles y avatares de los jugadores"
+    },
+    "/encuentros/{code}": {
+      "schema": "Encuentro",
+      "description": "Salas en vivo de GetToKnowMe indexadas por código"
+    },
+    "/history/{historyId}": {
+      "schema": "CompletedEncuentro",
+      "description": "Historial de partidas completadas para consulta de mosaicos y respuestas"
+    }
+  }
+}
