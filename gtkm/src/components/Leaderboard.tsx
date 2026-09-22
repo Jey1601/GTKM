@@ -63,9 +63,9 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
     }
   };
 
-  const handlePlayAgain = () => {
+  const handlePlayAgain = async () => {
     sounds.playSuccess();
-    const updated = restartEncuentroGame(encuentro.id);
+    const updated = await restartEncuentroGame(encuentro.id);
     if (updated) {
       onEncuentroUpdated(updated);
     }
