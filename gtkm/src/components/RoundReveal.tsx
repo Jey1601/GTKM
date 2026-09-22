@@ -51,11 +51,20 @@ export const RoundReveal: React.FC<RoundRevealProps> = ({
     return p.id !== currentRound.authorId && currentRound.votes[p.id] && currentRound.votes[p.id] !== currentRound.authorId;
   });
 
-  const handleNext = () => {
+  const [isAdvancing, setIsAdvancing] = useState(false);
+
+  const handleNext = async () => {
+    setIsAdvancing(true);
     sounds.playPop();
-    const updated = advanceToNextRoundOrLeaderboard(encuentro.id);
-    if (updated) {
-      onEncuentroUpdated(updated);
+    try {
+      const updated = await advanceToNextRoundOrLeaderboard(encuentro.id);
+      if (updated) {
+        onEncuentroUpdated(updated);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsAdvancing(false);
     }
   };
 
