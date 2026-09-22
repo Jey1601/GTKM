@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Send, CheckCircle2, Clock, HelpCircle, Sparkles } from 'lucide-react';
+import { Send, CheckCircle2, Clock, HelpCircle, Sparkles, Loader2, Zap } from 'lucide-react';
 import { Encuentro, User } from '../types';
-import { submitPlayerAnswers } from '../services/gameService';
+import { submitPlayerAnswers, forceAdvanceToVoting } from '../services/gameService';
 import { sounds } from '../utils/audio';
 
 interface QuestionPhaseProps {
@@ -17,13 +17,13 @@ export const QuestionPhase: React.FC<QuestionPhaseProps> = ({
 }) => {
   const currentPlayer = encuentro.players.find(p => p.id === currentUser.id);
   const alreadyAnswered = currentPlayer?.hasAnsweredAll ?? false;
+  const isHost = encuentro.hostId === currentUser.id;
 
   // Respuestas locales para cada pregunta
   const [answers, setAnswers] = useState<Record<string, string>>(() => {
-    // Si ya había contestado antes
     const initial: Record<string, string> = {};
     encuentro.questions.forEach(q => {
-      const existing = encuentro.allAnswers.find(a => a.playerId === currentUser.id && a.questionId === q.id);
+      const existing = (encuentro.allAnswers || []).find(a => a.playerId === currentUser.id && a.questionId === q.id);
       initial[q.id] = existing ? existing.answerText : '';
     });
     return initial;
@@ -31,6 +31,8 @@ export const QuestionPhase: React.FC<QuestionPhaseProps> = ({
 
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isForcing, setIsForcing] = useState(false);
 
   const currentQ = encuentro.questions[currentQuestionIndex];
   const totalQuestions = encuentro.questions.length;
@@ -42,7 +44,7 @@ export const QuestionPhase: React.FC<QuestionPhaseProps> = ({
     }));
   };
 
-  const handleNextOrSubmit = (e: React.FormEvent) => {
+  const handleNextOrSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
 
@@ -66,17 +68,38 @@ export const QuestionPhase: React.FC<QuestionPhaseProps> = ({
         return;
       }
 
-      // Enviar respuestas al servicio
-      const formattedAnswers = encuentro.questions.map(q => ({
-        questionId: q.id,
-        answerText: answers[q.id].trim()
-      }));
+      setIsSubmitting(true);
+      try {
+        const formattedAnswers = encuentro.questions.map(q => ({
+          questionId: q.id,
+          answerText: answers[q.id].trim()
+        }));
 
-      sounds.playSuccess();
-      const updated = submitPlayerAnswers(encuentro.id, currentUser.id, formattedAnswers);
+        sounds.playSuccess();
+        const updated = await submitPlayerAnswers(encuentro.id, currentUser.id, formattedAnswers);
+        if (updated) {
+          onEncuentroUpdated(updated);
+        }
+      } catch (err) {
+        setErrorMsg('Ocurrió un error al sincronizar tus respuestas. Por favor reintenta.');
+      } finally {
+        setIsSubmitting(false);
+      }
+    }
+  };
+
+  const handleForceAdvance = async () => {
+    setIsForcing(true);
+    sounds.playFanfare();
+    try {
+      const updated = await forceAdvanceToVoting(encuentro.id);
       if (updated) {
         onEncuentroUpdated(updated);
       }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsForcing(false);
     }
   };
 
@@ -132,7 +155,7 @@ export const QuestionPhase: React.FC<QuestionPhaseProps> = ({
 
       {/* If current player already finished all, show waiting card */}
       {alreadyAnswered ? (
-        <div className="bg-[#1b143f] border-2 border-emerald-500/40 rounded-3xl p-8 text-center shadow-2xl space-y-4">
+        <div className="bg-[#1b143f] border-2 border-emerald-500/40 rounded-3xl p-8 text-center shadow-2xl space-y-5">
           <div className="w-16 h-16 rounded-3xl bg-emerald-500/20 text-emerald-400 mx-auto flex items-center justify-center text-3xl animate-bounce">
             🎉
           </div>
@@ -140,12 +163,34 @@ export const QuestionPhase: React.FC<QuestionPhaseProps> = ({
             ¡Has completado tus respuestas!
           </h2>
           <p className="text-sm text-purple-200/80 max-w-md mx-auto">
-            El sistema está esperando a que el 100% de los participantes termine de contestar para iniciar el modo <b className="text-pink-400">Guess Who (Adivina Quién)</b>.
+            Tus respuestas se han guardado con éxito. El juego pasará automáticamente a <b className="text-pink-400">Adivina Quién (Guess Who)</b> cuando todos terminen.
           </p>
-          <div className="pt-4 flex items-center justify-center gap-2 text-xs font-bold text-cyan-300">
+          <div className="pt-2 flex items-center justify-center gap-2 text-xs font-bold text-cyan-300">
             <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
-            <span>Esperando a los demás jugadores...</span>
+            <span>Esperando a los demás jugadores ({answeredCount} de {totalPlayers} listos)...</span>
           </div>
+
+          {/* Host Emergency Force Advance Button */}
+          {isHost && (encuentro.allAnswers?.length || 0) > 0 && (
+            <div className="pt-4 border-t border-purple-500/20">
+              <p className="text-xs text-purple-300 mb-2">
+                ¿Algún participante se desconectó o tardó demasiado? Como anfitrión puedes iniciar la fase de adivinanzas ya:
+              </p>
+              <button
+                type="button"
+                onClick={handleForceAdvance}
+                disabled={isForcing}
+                className="px-6 py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-[#ff007a] hover:opacity-90 active:scale-95 text-white font-black text-xs sm:text-sm shadow-lg transition inline-flex items-center gap-2 disabled:opacity-50"
+              >
+                {isForcing ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Zap className="w-4 h-4" />
+                )}
+                <span>Avanzar a adivinanzas ahora (con los que ya respondieron)</span>
+              </button>
+            </div>
+          )}
         </div>
       ) : (
         /* Answering Question Card */
@@ -223,9 +268,15 @@ export const QuestionPhase: React.FC<QuestionPhaseProps> = ({
               <button
                 id="btn-submit-answer-step"
                 type="submit"
-                className="px-7 py-3.5 rounded-2xl bg-gradient-to-r from-[#ff007a] to-[#ff5900] hover:opacity-95 active:scale-95 text-white font-black text-base shadow-[0_4px_20px_rgba(255,0,122,0.4)] transition flex items-center gap-2"
+                disabled={isSubmitting}
+                className="px-7 py-3.5 rounded-2xl bg-gradient-to-r from-[#ff007a] to-[#ff5900] hover:opacity-95 active:scale-95 text-white font-black text-base shadow-[0_4px_20px_rgba(255,0,122,0.4)] transition flex items-center gap-2 disabled:opacity-50"
               >
-                {currentQuestionIndex + 1 < totalQuestions ? (
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>Enviando respuestas...</span>
+                  </>
+                ) : currentQuestionIndex + 1 < totalQuestions ? (
                   <>
                     <span>Siguiente Pregunta</span>
                     <span>→</span>
