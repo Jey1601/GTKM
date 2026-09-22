@@ -1,21 +1,24 @@
 import React, { useState } from 'react';
-import { UserPlus, LogIn, Sparkles, KeyRound, User as UserIcon, AtSign, ArrowRight } from 'lucide-react';
+import { UserPlus, LogIn, Sparkles, KeyRound, User as UserIcon, AtSign, ArrowRight, Loader2, PartyPopper } from 'lucide-react';
 import { User } from '../types';
-import { getAllUsers, saveCurrentUser } from '../services/gameService';
+import { loginUserAsync, registerUserAsync } from '../services/gameService';
 import { sounds } from '../utils/audio';
 
 interface AuthScreenProps {
   onAuthenticated: (user: User, isNewRegistration: boolean) => void;
+  invitedRoomCode?: string | null;
 }
 
-export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
-  const [isRegisterMode, setIsRegisterMode] = useState(true);
+export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated, invitedRoomCode }) => {
+  // La primera pantalla al ingresar al enlace es el Inicio de Sesión
+  const [isRegisterMode, setIsRegisterMode] = useState(false);
   const [name, setName] = useState('');
   const [nickname, setNickname] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  const handleRegister = (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
@@ -43,29 +46,34 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
       return;
     }
 
-    const allUsers = getAllUsers();
-    if (allUsers[cleanNick]) {
-      setError(`El nickname "@${cleanNick}" ya está en uso. Elige otro o inicia sesión.`);
-      sounds.playBuzzer();
-      return;
+    setLoading(true);
+    try {
+      const newUser: User = {
+        id: `usr_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        name: cleanName,
+        nickname: cleanNick,
+        password: password,
+        avatarDataUrl: '',
+        createdAt: Date.now()
+      };
+
+      const result = await registerUserAsync(newUser);
+      if (!result.success || !result.user) {
+        setError(result.error || 'No se pudo crear la cuenta.');
+        sounds.playBuzzer();
+        return;
+      }
+
+      sounds.playSuccess();
+      onAuthenticated(result.user, true);
+    } catch (err) {
+      setError('Ocurrió un error al registrarte. Intenta de nuevo.');
+    } finally {
+      setLoading(false);
     }
-
-    // Crear nuevo usuario provisional sin avatar (irá al Canvas)
-    const newUser: User = {
-      id: `usr_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-      name: cleanName,
-      nickname: cleanNick,
-      password: password,
-      avatarDataUrl: '', // Se generará en el Canvas
-      createdAt: Date.now()
-    };
-
-    sounds.playSuccess();
-    saveCurrentUser(newUser);
-    onAuthenticated(newUser, true);
   };
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
@@ -76,24 +84,22 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
       return;
     }
 
-    const allUsers = getAllUsers();
-    const existing = allUsers[cleanNick];
+    setLoading(true);
+    try {
+      const result = await loginUserAsync(cleanNick, password);
+      if (!result.success || !result.user) {
+        setError(result.error || 'Credenciales inválidas.');
+        sounds.playBuzzer();
+        return;
+      }
 
-    if (!existing) {
-      setError(`No se encontró ninguna cuenta con el nickname "@${cleanNick}". Puedes registrarte.`);
-      sounds.playBuzzer();
-      return;
+      sounds.playSuccess();
+      onAuthenticated(result.user, false);
+    } catch (err) {
+      setError('Error al iniciar sesión. Verifica tu conexión.');
+    } finally {
+      setLoading(false);
     }
-
-    if (existing.password && existing.password !== password) {
-      setError('Contraseña incorrecta. Por favor intenta de nuevo.');
-      sounds.playBuzzer();
-      return;
-    }
-
-    sounds.playSuccess();
-    saveCurrentUser(existing);
-    onAuthenticated(existing, false);
   };
 
   const handleQuickDemoUser = (demoName: string, demoNick: string) => {
@@ -116,27 +122,20 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
         <p className="text-purple-200/80 text-sm mt-1">
           Dibuja tu avatar, responde preguntas disparatadas y adivina los secretos de tus amigos.
         </p>
+
+        {/* Invited Room Badge if URL has ?code=... */}
+        {invitedRoomCode && (
+          <div className="mt-4 p-3 bg-pink-500/20 border border-pink-500/40 rounded-2xl flex items-center justify-center gap-2 text-sm text-pink-300 font-bold shadow-lg animate-pulse">
+            <PartyPopper className="w-4 h-4 text-pink-400" />
+            <span>Invitación para unirte a la sala: <b className="text-white tracking-wider">{invitedRoomCode}</b></span>
+          </div>
+        )}
       </div>
 
       {/* Main Card */}
       <div className="bg-[#1c1444]/90 backdrop-blur-md border-2 border-purple-500/30 rounded-3xl p-6 sm:p-8 shadow-[0_20px_50px_rgba(0,0,0,0.6)]">
-        {/* Tab Selector */}
+        {/* Tab Selector: Iniciar Sesión is first and default */}
         <div className="grid grid-cols-2 p-1 bg-[#120e28] rounded-2xl mb-6 border border-white/10">
-          <button
-            type="button"
-            onClick={() => {
-              sounds.playClick();
-              setIsRegisterMode(true);
-              setError(null);
-            }}
-            className={`py-2.5 rounded-xl font-bold text-sm transition flex items-center justify-center gap-2 ${
-              isRegisterMode
-                ? 'bg-gradient-to-r from-[#ff007a] to-[#7928ca] text-white shadow-lg'
-                : 'text-purple-300 hover:text-white'
-            }`}
-          >
-            <UserPlus className="w-4 h-4" /> Registro
-          </button>
           <button
             type="button"
             onClick={() => {
@@ -151,6 +150,21 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
             }`}
           >
             <LogIn className="w-4 h-4" /> Iniciar Sesión
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              sounds.playClick();
+              setIsRegisterMode(true);
+              setError(null);
+            }}
+            className={`py-2.5 rounded-xl font-bold text-sm transition flex items-center justify-center gap-2 ${
+              isRegisterMode
+                ? 'bg-gradient-to-r from-[#ff007a] to-[#7928ca] text-white shadow-lg'
+                : 'text-purple-300 hover:text-white'
+            }`}
+          >
+            <UserPlus className="w-4 h-4" /> Registrarme
           </button>
         </div>
 
@@ -193,7 +207,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
             />
             {isRegisterMode && (
               <span className="text-[11px] text-purple-400 mt-1 block">
-                Este apodo se usará para iniciar sesión y en los juegos.
+                Este apodo se usará para iniciar sesión y ante los demás jugadores.
               </span>
             )}
           </div>
@@ -216,9 +230,15 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
           <button
             id="btn-auth-submit"
             type="submit"
-            className="w-full mt-2 py-3.5 px-6 rounded-2xl bg-gradient-to-r from-[#ff007a] via-[#ff5900] to-[#ffd60a] hover:opacity-95 active:scale-[0.98] text-white font-black text-base shadow-[0_4px_25px_rgba(255,0,122,0.4)] transition flex items-center justify-center gap-2"
+            disabled={loading}
+            className="w-full mt-2 py-3.5 px-6 rounded-2xl bg-gradient-to-r from-[#ff007a] via-[#ff5900] to-[#ffd60a] hover:opacity-95 active:scale-[0.98] text-white font-black text-base shadow-[0_4px_25px_rgba(255,0,122,0.4)] transition flex items-center justify-center gap-2 disabled:opacity-50"
           >
-            {isRegisterMode ? (
+            {loading ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" />
+                <span>Verificando...</span>
+              </>
+            ) : isRegisterMode ? (
               <>
                 <span>Continuar y Dibujar Avatar</span>
                 <ArrowRight className="w-5 h-5 stroke-[2.5]" />
