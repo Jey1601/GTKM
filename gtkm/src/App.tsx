@@ -11,6 +11,7 @@ import {
   saveCurrentUser, 
   logoutUser, 
   getEncuentro, 
+  joinEncuentro,
   subscribeToEncuentroUpdates, 
   getAllUsers,
   seedInitialHistoryIfEmpty
@@ -30,16 +31,24 @@ import { ProfileModal } from './components/ProfileModal';
 import { EncuentrosHistoryView } from './components/EncuentrosHistoryView';
 
 export default function App() {
+  // Al ingresar al enlace, la primera pantalla siempre debe ser el Inicio de Sesión
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [inviteRoomCode, setInviteRoomCode] = useState<string | null>(null);
   const [isInitialDrawing, setIsInitialDrawing] = useState(false);
   const [currentEncuentro, setCurrentEncuentro] = useState<Encuentro | null>(null);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [isViewingHistory, setIsViewingHistory] = useState(false);
 
-  // Inicializar usuario desde localStorage y sembrar usuarios demo e historial si es la primera vez
+  // Inicialización en montaje: capturar invitación de URL y sembrar datos de prueba
   useEffect(() => {
-    // Sembrar historial inicial si está vacío
     seedInitialHistoryIfEmpty();
+
+    // Capturar si hay invitación en la URL (?code=XYZ o ?join=XYZ)
+    const params = new URLSearchParams(window.location.search);
+    const codeFromUrl = (params.get('code') || params.get('join') || '').trim().toUpperCase();
+    if (codeFromUrl) {
+      setInviteRoomCode(codeFromUrl);
+    }
 
     // Si no existen usuarios en la base local, inicializar algunos de muestra para pruebas rápidas
     const existingUsers = getAllUsers();
@@ -63,18 +72,21 @@ export default function App() {
       saveCurrentUser(demoUser1);
       saveCurrentUser(demoUser2);
     }
-
-    const savedUser = getCurrentUser();
-    if (savedUser) {
-      // Si el usuario no tiene avatar aún, mandar a dibujar
-      if (!savedUser.avatarDataUrl) {
-        setCurrentUser(savedUser);
-        setIsInitialDrawing(true);
-      } else {
-        setCurrentUser(savedUser);
-      }
-    }
   }, []);
+
+  // Auto-unir a la sala invitada una vez autenticado
+  const autoJoinRoom = async (code: string, user: User) => {
+    try {
+      const res = await joinEncuentro(code, user);
+      if (res.success && res.encuentro) {
+        setCurrentEncuentro(res.encuentro);
+        setInviteRoomCode(null);
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+    } catch (e) {
+      console.warn('Error al auto-unirse a la sala:', e);
+    }
+  };
 
   // Suscribirse a actualizaciones en tiempo real (BroadcastChannel y Cloud Firestore onSnapshot)
   useEffect(() => {
@@ -91,15 +103,17 @@ export default function App() {
   }, [currentEncuentro?.code]);
 
   // Manejo de autenticación exitosa
-  const handleAuthenticated = (user: User, isNewRegistration: boolean) => {
+  const handleAuthenticated = async (user: User, isNewRegistration: boolean) => {
     setCurrentUser(user);
     if (isNewRegistration || !user.avatarDataUrl) {
       setIsInitialDrawing(true);
+    } else if (inviteRoomCode) {
+      await autoJoinRoom(inviteRoomCode, user);
     }
   };
 
   // Guardar avatar dibujado en el Canvas tras registro
-  const handleSaveInitialAvatar = (avatarDataUrl: string) => {
+  const handleSaveInitialAvatar = async (avatarDataUrl: string) => {
     if (!currentUser) return;
     const updated: User = {
       ...currentUser,
@@ -108,6 +122,10 @@ export default function App() {
     saveCurrentUser(updated);
     setCurrentUser(updated);
     setIsInitialDrawing(false);
+
+    if (inviteRoomCode) {
+      await autoJoinRoom(inviteRoomCode, updated);
+    }
   };
 
   // Cerrar sesión
@@ -151,7 +169,7 @@ export default function App() {
       {/* Main App Content Flow */}
       <main className="flex-1 flex flex-col justify-center items-center py-4 sm:py-8 px-2">
         <AnimatePresence mode="wait">
-          {/* 1. Flujo No Autenticado */}
+          {/* 1. Flujo No Autenticado (Siempre es la primera pantalla mostrada al entrar al enlace) */}
           {!currentUser ? (
             <motion.div
               key="auth"
@@ -161,7 +179,10 @@ export default function App() {
               transition={{ duration: 0.25 }}
               className="w-full"
             >
-              <AuthScreen onAuthenticated={handleAuthenticated} />
+              <AuthScreen 
+                onAuthenticated={handleAuthenticated} 
+                invitedRoomCode={inviteRoomCode}
+              />
             </motion.div>
           ) : isInitialDrawing ? (
             /* 2. Pantalla de dibujo del Avatar tras primer registro */
