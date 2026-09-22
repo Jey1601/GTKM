@@ -75,9 +75,9 @@ export const SessionHistory: React.FC<SessionHistoryProps> = ({
 
           <button
             type="button"
-            onClick={() => {
+            onClick={async () => {
               sounds.playSuccess();
-              const updated = restartEncuentroGame(encuentro.id);
+              const updated = await restartEncuentroGame(encuentro.id);
               if (updated) onRestart(updated);
             }}
             className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-[#ff007a] to-[#ff5900] hover:opacity-90 text-white font-black text-xs sm:text-sm shadow-md transition flex items-center gap-2"
