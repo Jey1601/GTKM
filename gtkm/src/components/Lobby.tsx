@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Copy, Check, Play, UserPlus, Sparkles, Crown, Users, RefreshCw, AlertCircle } from 'lucide-react';
+import { Copy, Check, Play, UserPlus, Sparkles, Crown, Users, RefreshCw, AlertCircle, Sliders, Link, Loader2 } from 'lucide-react';
 import { Encuentro, User } from '../types';
-import { startGame, addSampleBots } from '../services/gameService';
+import { startGame, addSampleBots, updateEncuentroSettings } from '../services/gameService';
 import { sounds } from '../utils/audio';
 
 interface LobbyProps {
@@ -15,34 +15,59 @@ export const Lobby: React.FC<LobbyProps> = ({
   currentUser,
   onEncuentroUpdated
 }) => {
-  const [copied, setCopied] = useState(false);
+  const [copiedCode, setCopiedCode] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [isStarting, setIsStarting] = useState(false);
+  const [isAddingBots, setIsAddingBots] = useState(false);
   const isHost = encuentro.hostId === currentUser.id;
 
   const handleCopyCode = () => {
     navigator.clipboard.writeText(encuentro.code);
-    setCopied(true);
+    setCopiedCode(true);
     sounds.playSuccess();
-    setTimeout(() => setCopied(false), 2000);
+    setTimeout(() => setCopiedCode(false), 2000);
   };
 
-  const handleAddBots = () => {
+  const handleCopyLink = () => {
+    const inviteUrl = `${window.location.origin}/?code=${encuentro.code}`;
+    navigator.clipboard.writeText(inviteUrl);
+    setCopiedLink(true);
+    sounds.playSuccess();
+    setTimeout(() => setCopiedLink(false), 2500);
+  };
+
+  const handleAddBots = async () => {
+    setIsAddingBots(true);
     sounds.playPop();
-    const updated = addSampleBots(encuentro.id);
-    if (updated) {
-      sounds.playSuccess();
-      onEncuentroUpdated(updated);
+    try {
+      const updated = await addSampleBots(encuentro.id);
+      if (updated) {
+        sounds.playSuccess();
+        onEncuentroUpdated(updated);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsAddingBots(false);
     }
   };
 
-  const handleStartGame = () => {
+  const handleStartGame = async () => {
     if (encuentro.players.length < 2) {
       sounds.playBuzzer();
       return;
     }
+    setIsStarting(true);
     sounds.playFanfare();
-    const updated = startGame(encuentro.id);
-    if (updated) {
-      onEncuentroUpdated(updated);
+    try {
+      const updated = await startGame(encuentro.id);
+      if (updated) {
+        onEncuentroUpdated(updated);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsStarting(false);
     }
   };
 
@@ -62,11 +87,11 @@ export const Lobby: React.FC<LobbyProps> = ({
           {encuentro.title}
         </h1>
         <p className="text-sm text-purple-200/80 max-w-lg mx-auto mb-6">
-          Comparte este código con tus amigos o familiares para que entren desde su teléfono o laptop.
+          Comparte este código o enlace directo con tus amigos para que entren desde cualquier dispositivo móvil o computadora.
         </p>
 
-        {/* Big Code Pill */}
-        <div className="inline-flex flex-col sm:flex-row items-center gap-3 p-3 bg-[#120e28] border-2 border-[#ff007a] rounded-3xl shadow-[0_0_30px_rgba(255,0,122,0.3)] mb-6">
+        {/* Big Code Pill and Action Buttons */}
+        <div className="inline-flex flex-col sm:flex-row items-center gap-3 p-3 bg-[#120e28] border-2 border-[#ff007a] rounded-3xl shadow-[0_0_30px_rgba(255,0,122,0.3)] mb-4">
           <div className="px-6 py-2">
             <span className="text-xs font-extrabold uppercase text-purple-400 block">CÓDIGO DE ENCUENTRO</span>
             <span className="text-4xl sm:text-5xl font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-[#00d2ff] via-[#ffd60a] to-[#ff007a]">
@@ -74,30 +99,58 @@ export const Lobby: React.FC<LobbyProps> = ({
             </span>
           </div>
 
-          <button
-            id="lobby-copy-code-btn"
-            type="button"
-            onClick={handleCopyCode}
-            className="px-5 py-3 rounded-2xl bg-gradient-to-r from-[#ff007a] to-[#ff5900] hover:opacity-90 active:scale-95 text-white font-extrabold text-sm shadow-md transition flex items-center gap-2"
-          >
-            {copied ? (
-              <>
-                <Check className="w-4 h-4 text-green-300" />
-                <span>¡Copiado!</span>
-              </>
-            ) : (
-              <>
-                <Copy className="w-4 h-4" />
-                <span>Copiar Código</span>
-              </>
-            )}
-          </button>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <button
+              id="lobby-copy-code-btn"
+              type="button"
+              onClick={handleCopyCode}
+              className="px-4 py-3 rounded-2xl bg-[#ff007a] hover:bg-[#ff007a]/80 active:scale-95 text-white font-extrabold text-sm shadow-md transition flex items-center justify-center gap-2"
+            >
+              {copiedCode ? (
+                <>
+                  <Check className="w-4 h-4 text-green-300" />
+                  <span>¡Código Copiado!</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-4 h-4" />
+                  <span>Copiar Código</span>
+                </>
+              )}
+            </button>
+
+            <button
+              id="lobby-copy-link-btn"
+              type="button"
+              onClick={handleCopyLink}
+              className="px-4 py-3 rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:opacity-90 active:scale-95 text-white font-extrabold text-sm shadow-md transition flex items-center justify-center gap-2"
+            >
+              {copiedLink ? (
+                <>
+                  <Check className="w-4 h-4 text-green-300" />
+                  <span>¡Enlace Copiado!</span>
+                </>
+              ) : (
+                <>
+                  <Link className="w-4 h-4" />
+                  <span>Copiar Enlace de Invitación</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
 
-        {/* Players Count Tag */}
-        <div className="flex items-center justify-center gap-2 text-sm font-bold text-purple-300">
-          <Users className="w-4 h-4 text-cyan-400" />
-          <span>{encuentro.players.length} {encuentro.players.length === 1 ? 'jugador en la sala' : 'jugadores en la sala'}</span>
+        {/* Players Count & Game Settings Tag */}
+        <div className="flex flex-wrap items-center justify-center gap-3 text-sm font-bold text-purple-300">
+          <div className="flex items-center gap-1.5">
+            <Users className="w-4 h-4 text-cyan-400" />
+            <span>{encuentro.players.length} {encuentro.players.length === 1 ? 'jugador en la sala' : 'jugadores en la sala'}</span>
+          </div>
+          <span className="text-white/20">•</span>
+          <div className="flex items-center gap-1.5 text-pink-300 bg-pink-500/10 px-3 py-1 rounded-full border border-pink-500/20 text-xs">
+            <Sliders className="w-3.5 h-3.5 text-pink-400" />
+            <span>Guess Who: {encuentro.guessWhoPercentage ?? 70}% al azar</span>
+          </div>
         </div>
       </div>
 
@@ -183,6 +236,71 @@ export const Lobby: React.FC<LobbyProps> = ({
       <div className="bg-[#140f30] border border-white/10 rounded-3xl p-6 text-center">
         {isHost ? (
           <div>
+            {/* Host In-Lobby Settings Adjustment */}
+            <div className="mb-6 p-4 rounded-2xl bg-[#120e28] border border-purple-500/30 text-left max-w-xl mx-auto">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-bold uppercase tracking-wider text-pink-300 flex items-center gap-1.5">
+                  <Sliders className="w-3.5 h-3.5 text-pink-400" />
+                  <span>Configuración Guess Who para esta partida:</span>
+                </span>
+                <span className="px-2.5 py-0.5 rounded-full bg-pink-500/20 text-pink-300 font-black text-xs border border-pink-500/30">
+                  {encuentro.guessWhoPercentage ?? 70}%
+                </span>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center gap-3">
+                  <span className="text-[11px] font-bold text-purple-400">20%</span>
+                  <input
+                    type="range"
+                    min={20}
+                    max={100}
+                    step={5}
+                    value={encuentro.guessWhoPercentage ?? 70}
+                    onChange={e => {
+                      const val = Number(e.target.value);
+                      const updated = updateEncuentroSettings(encuentro.id, { guessWhoPercentage: val });
+                      if (updated) onEncuentroUpdated(updated);
+                    }}
+                    className="w-full accent-[#ff007a] cursor-pointer h-2 bg-purple-950 rounded-lg"
+                  />
+                  <span className="text-[11px] font-bold text-pink-300">100%</span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-1.5 pt-1">
+                  {[
+                    { pct: 50, label: '50% Rápida' },
+                    { pct: 70, label: '70% Clásica' },
+                    { pct: 100, label: '100% Completa' }
+                  ].map(preset => (
+                    <button
+                      key={preset.pct}
+                      type="button"
+                      onClick={() => {
+                        sounds.playPop();
+                        const updated = updateEncuentroSettings(encuentro.id, { guessWhoPercentage: preset.pct });
+                        if (updated) onEncuentroUpdated(updated);
+                      }}
+                      className={`py-1.5 px-2 rounded-xl text-center text-xs font-bold border transition ${
+                        (encuentro.guessWhoPercentage ?? 70) === preset.pct
+                          ? 'bg-[#ff007a]/30 border-[#ff007a] text-white shadow-sm'
+                          : 'bg-white/5 border-white/10 text-purple-300 hover:bg-white/10'
+                      }`}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+
+                <p className="text-[11px] text-purple-300/70 pt-1">
+                  {(encuentro.guessWhoPercentage ?? 70) === 100
+                    ? '🔥 Modo Intenso: Se adivinarán absolutamente todas las respuestas de los participantes.'
+                    : `🎲 Se seleccionará al azar el ${encuentro.guessWhoPercentage ?? 70}% de las respuestas recibidas para adivinar el autor.`
+                  }
+                </p>
+              </div>
+            </div>
+
             {encuentro.players.length < 2 ? (
               <div className="space-y-3">
                 <div className="inline-flex items-center gap-2 text-amber-300 text-sm font-bold bg-amber-500/20 px-4 py-2 rounded-2xl">
@@ -218,7 +336,11 @@ export const Lobby: React.FC<LobbyProps> = ({
             )}
           </div>
         ) : (
-          <div className="flex flex-col items-center gap-2 py-2">
+          <div className="flex flex-col items-center gap-3 py-2">
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-purple-900/50 border border-purple-500/30 text-purple-200 text-xs font-semibold">
+              <Sliders className="w-3.5 h-3.5 text-pink-400" />
+              <span>Regla Guess Who: <b className="text-white">{encuentro.guessWhoPercentage ?? 70}% de preguntas</b> al azar</span>
+            </div>
             <RefreshCw className="w-6 h-6 text-pink-400 animate-spin" />
             <h3 className="text-lg font-black text-white">
               Esperando a que el anfitrión inicie la partida...
