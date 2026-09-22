@@ -21,6 +21,9 @@ export const GuessWhoVoting: React.FC<GuessWhoVotingProps> = ({
   const currentVote = currentRound?.votes[currentUser.id];
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(currentVote || null);
 
+  const [isSubmittingVote, setIsSubmittingVote] = useState(false);
+  const [isRevealing, setIsRevealing] = useState(false);
+
   if (!currentRound) {
     return (
       <div className="text-center p-8 text-white">
@@ -29,21 +32,35 @@ export const GuessWhoVoting: React.FC<GuessWhoVotingProps> = ({
     );
   }
 
-  const handleSelectVote = (targetPlayerId: string) => {
+  const handleSelectVote = async (targetPlayerId: string) => {
     sounds.playPop();
     setSelectedPlayerId(targetPlayerId);
+    setIsSubmittingVote(true);
 
-    const updated = submitVote(encuentro.id, currentUser.id, targetPlayerId);
-    if (updated) {
-      onEncuentroUpdated(updated);
+    try {
+      const updated = await submitVote(encuentro.id, currentUser.id, targetPlayerId);
+      if (updated) {
+        onEncuentroUpdated(updated);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsSubmittingVote(false);
     }
   };
 
-  const handleReveal = () => {
+  const handleReveal = async () => {
+    setIsRevealing(true);
     sounds.playDrumroll();
-    const updated = revealCurrentRound(encuentro.id);
-    if (updated) {
-      onEncuentroUpdated(updated);
+    try {
+      const updated = await revealCurrentRound(encuentro.id);
+      if (updated) {
+        onEncuentroUpdated(updated);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsRevealing(false);
     }
   };
 
@@ -61,7 +78,7 @@ export const GuessWhoVoting: React.FC<GuessWhoVotingProps> = ({
             <span>Ronda {encuentro.currentRoundIndex + 1} de {encuentro.totalSelectedRounds}</span>
           </div>
           <span className="text-xs text-purple-300 font-bold hidden sm:inline">
-            (70% seleccionado al azar de la sesión)
+            ({encuentro.guessWhoPercentage ?? 70}% seleccionado al azar de la sesión)
           </span>
         </div>
 
