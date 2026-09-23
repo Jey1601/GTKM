@@ -171,7 +171,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   placeholder="Ej. FIESTA"
                   value={joinCode}
                   onChange={e => setJoinCode(e.target.value.toUpperCase())}
-                  className="w-full text-center tracking-widest text-2xl font-black uppercase px-4 py-3 bg-[#120e28] border-2 border-cyan-500/40 rounded-2xl text-cyan-300 placeholder-purple-400/40 focus:outline-none focus:border-cyan-400 focus:ring-4 focus:ring-cyan-500/20 transition"
+                  autoCapitalize="characters"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  autoComplete="off"
+                  className="w-full text-center tracking-widest text-2xl font-black uppercase px-4 py-3 bg-[#120e28] border-2 border-cyan-500/40 rounded-2xl text-cyan-300 placeholder-purple-400/40 focus:outline-none focus:border-cyan-400 focus:ring-4 focus:ring-cyan-500/20 transition min-h-[52px]"
                 />
               </div>
 
@@ -281,7 +285,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     placeholder="Escribe una pregunta por línea...&#10;Ej: ¿Quién tiene más multas de tráfico?&#10;¿Cuál es tu peor cita?"
                     value={customQuestionsInput}
                     onChange={e => setCustomQuestionsInput(e.target.value)}
-                    className="w-full px-3 py-2 bg-[#120e28] border border-amber-400/40 rounded-xl text-white text-xs placeholder-purple-400/40 focus:outline-none focus:border-amber-400"
+                    className="w-full px-3 py-2 bg-[#120e28] border border-amber-400/40 rounded-xl text-white text-base sm:text-xs placeholder-purple-400/40 focus:outline-none focus:border-amber-400"
                   />
                 </div>
               )}

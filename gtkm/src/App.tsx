@@ -90,15 +90,18 @@ export default function App() {
 
   // Suscribirse a actualizaciones en tiempo real (BroadcastChannel y Cloud Firestore onSnapshot)
   useEffect(() => {
-    const unsubscribe = subscribeToEncuentroUpdates((code) => {
-      if (currentEncuentro) {
-        const targetCode = code || currentEncuentro.code;
-        const refreshed = getEncuentro(targetCode);
+    if (!currentEncuentro?.code) return;
+    const roomCode = currentEncuentro.code.trim().toUpperCase();
+    const unsubscribe = subscribeToEncuentroUpdates((code, directEncuentro) => {
+      if (directEncuentro && directEncuentro.code) {
+        setCurrentEncuentro(directEncuentro);
+      } else {
+        const refreshed = getEncuentro(roomCode);
         if (refreshed) {
           setCurrentEncuentro(refreshed);
         }
       }
-    }, currentEncuentro?.code);
+    }, roomCode);
     return () => unsubscribe();
   }, [currentEncuentro?.code]);
 
@@ -147,7 +150,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#120e28] text-white flex flex-col font-sans selection:bg-[#ff007a] selection:text-white relative overflow-x-hidden">
+    <div className="min-h-screen min-h-screen-dynamic bg-[#120e28] text-white flex flex-col font-sans selection:bg-[#ff007a] selection:text-white relative overflow-x-hidden">
       {/* Background ambient lighting effects */}
       <div className="fixed top-0 left-1/4 w-96 h-96 bg-[#ff007a]/15 rounded-full blur-[140px] pointer-events-none -z-10" />
       <div className="fixed bottom-0 right-1/4 w-96 h-96 bg-[#00d2ff]/15 rounded-full blur-[140px] pointer-events-none -z-10" />
@@ -257,6 +260,7 @@ export default function App() {
                   encuentro={currentEncuentro}
                   currentUser={currentUser}
                   onEncuentroUpdated={handleEncuentroUpdated}
+                  onLeaveEncuentro={handleLeaveEncuentro}
                 />
               )}
 
@@ -310,7 +314,7 @@ export default function App() {
       )}
 
       {/* Subtle Footer */}
-      <footer className="w-full py-4 text-center text-xs text-purple-400/60 border-t border-purple-900/30">
+      <footer className="w-full py-4 pb-safe text-center text-xs text-purple-400/60 border-t border-purple-900/30">
         <p>GetToKnowMe 🎭 Diseñado para amigos y familia • Estilo Jackbox & Kahoot</p>
       </footer>
     </div>

@@ -118,7 +118,12 @@ export const AvatarCanvas: React.FC<AvatarCanvasProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    canvas.setPointerCapture(e.pointerId);
+    try {
+      canvas.setPointerCapture(e.pointerId);
+    } catch {
+      // Safe fallback for mobile browsers that restrict pointer capture
+    }
+
     setIsDrawing(true);
     const { x, y } = getCoordinates(e);
 
@@ -300,40 +305,40 @@ export const AvatarCanvas: React.FC<AvatarCanvasProps> = ({
             onPointerMove={draw}
             onPointerUp={stopDrawing}
             onPointerCancel={stopDrawing}
-            className="w-[260px] h-[260px] sm:w-[300px] sm:h-[300px] rounded-2xl bg-white cursor-crosshair touch-none shadow-inner border-4 border-[#120e28]"
+            className="w-[min(260px,70vw)] h-[min(260px,70vw)] sm:w-[300px] sm:h-[300px] rounded-2xl bg-white cursor-crosshair touch-none shadow-inner border-4 border-[#120e28]"
           />
         </div>
 
         {/* Quick Face Presets / Helpers */}
-        <div className="flex items-center gap-2 mt-3 text-xs text-purple-200">
+        <div className="flex flex-wrap justify-center items-center gap-1.5 sm:gap-2 mt-3 text-xs text-purple-200 px-1">
           <span className="flex items-center gap-1 font-semibold text-amber-300">
             <Wand2 className="w-3.5 h-3.5" /> Plantillas rápidas:
           </span>
           <button
             type="button"
             onClick={() => handlePresetFace('happy')}
-            className="px-2.5 py-1 bg-white/10 hover:bg-white/20 active:scale-95 rounded-lg transition text-white"
+            className="px-2.5 py-1.5 bg-white/10 hover:bg-white/20 active:scale-95 rounded-lg transition text-white min-h-[36px]"
           >
             😊 Feliz
           </button>
           <button
             type="button"
             onClick={() => handlePresetFace('cool')}
-            className="px-2.5 py-1 bg-white/10 hover:bg-white/20 active:scale-95 rounded-lg transition text-white"
+            className="px-2.5 py-1.5 bg-white/10 hover:bg-white/20 active:scale-95 rounded-lg transition text-white min-h-[36px]"
           >
             😎 Cool
           </button>
           <button
             type="button"
             onClick={() => handlePresetFace('cat')}
-            className="px-2.5 py-1 bg-white/10 hover:bg-white/20 active:scale-95 rounded-lg transition text-white"
+            className="px-2.5 py-1.5 bg-white/10 hover:bg-white/20 active:scale-95 rounded-lg transition text-white min-h-[36px]"
           >
             🐱 Michi
           </button>
           <button
             type="button"
             onClick={() => handlePresetFace('silly')}
-            className="px-2.5 py-1 bg-white/10 hover:bg-white/20 active:scale-95 rounded-lg transition text-white"
+            className="px-2.5 py-1.5 bg-white/10 hover:bg-white/20 active:scale-95 rounded-lg transition text-white min-h-[36px]"
           >
             🤪 Loco
           </button>
@@ -341,7 +346,7 @@ export const AvatarCanvas: React.FC<AvatarCanvasProps> = ({
       </div>
 
       {/* Palette and Drawing Tools */}
-      <div className="space-y-3 bg-[#120e28]/70 p-4 rounded-2xl border border-white/10 mt-3">
+      <div className="space-y-3 bg-[#120e28]/70 p-3.5 sm:p-4 rounded-2xl border border-white/10 mt-3">
         {/* Color Swatches */}
         <div>
           <div className="flex items-center justify-between mb-2">
@@ -363,7 +368,8 @@ export const AvatarCanvas: React.FC<AvatarCanvasProps> = ({
                   setIsEraser(false);
                 }}
                 style={{ backgroundColor: color }}
-                className={`h-7 rounded-lg transition-transform active:scale-90 border-2 ${
+                aria-label={`Color ${color}`}
+                className={`h-9 sm:h-7 rounded-lg transition-transform active:scale-90 border-2 ${
                   !isEraser && selectedColor === color
                     ? 'border-white scale-110 shadow-[0_0_10px_white]'
                     : 'border-white/20 hover:scale-105'

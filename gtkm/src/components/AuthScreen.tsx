@@ -188,7 +188,9 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated, invited
                 placeholder="Ej. Carlos Mendoza"
                 value={name}
                 onChange={e => setName(e.target.value)}
-                className="w-full px-4 py-3 bg-[#120e28] border border-purple-500/30 rounded-xl text-white placeholder-purple-400/50 focus:outline-none focus:border-[#ff007a] focus:ring-2 focus:ring-[#ff007a]/40 text-sm transition"
+                autoCapitalize="words"
+                autoComplete="name"
+                className="w-full px-4 py-3 bg-[#120e28] border border-purple-500/30 rounded-xl text-white placeholder-purple-400/50 focus:outline-none focus:border-[#ff007a] focus:ring-2 focus:ring-[#ff007a]/40 text-base transition min-h-[44px]"
               />
             </div>
           )}
@@ -203,7 +205,11 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated, invited
               placeholder="Ej. carlitos_pro"
               value={nickname}
               onChange={e => setNickname(e.target.value)}
-              className="w-full px-4 py-3 bg-[#120e28] border border-purple-500/30 rounded-xl text-white placeholder-purple-400/50 focus:outline-none focus:border-[#ff007a] focus:ring-2 focus:ring-[#ff007a]/40 text-sm transition"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              autoComplete="username"
+              className="w-full px-4 py-3 bg-[#120e28] border border-purple-500/30 rounded-xl text-white placeholder-purple-400/50 focus:outline-none focus:border-[#ff007a] focus:ring-2 focus:ring-[#ff007a]/40 text-base transition min-h-[44px]"
             />
             {isRegisterMode && (
               <span className="text-[11px] text-purple-400 mt-1 block">
@@ -222,7 +228,11 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated, invited
               placeholder="••••••••"
               value={password}
               onChange={e => setPassword(e.target.value)}
-              className="w-full px-4 py-3 bg-[#120e28] border border-purple-500/30 rounded-xl text-white placeholder-purple-400/50 focus:outline-none focus:border-[#ff007a] focus:ring-2 focus:ring-[#ff007a]/40 text-sm transition"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              autoComplete={isRegisterMode ? 'new-password' : 'current-password'}
+              className="w-full px-4 py-3 bg-[#120e28] border border-purple-500/30 rounded-xl text-white placeholder-purple-400/50 focus:outline-none focus:border-[#ff007a] focus:ring-2 focus:ring-[#ff007a]/40 text-base transition min-h-[44px]"
             />
           </div>
 

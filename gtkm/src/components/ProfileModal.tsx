@@ -45,9 +45,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto pb-safe pt-safe">
       {isEditingCanvas ? (
-        <div className="w-full max-w-xl max-h-[95vh] overflow-y-auto">
+        <div className="w-full max-w-xl max-h-[90vh] overflow-y-auto">
           <AvatarCanvas
             initialAvatar={currentUser.avatarDataUrl}
             onSave={handleSaveAvatar}
@@ -57,12 +57,13 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
           />
         </div>
       ) : (
-        <div className="bg-[#1c1444] border-2 border-purple-500/40 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl relative">
+        <div className="bg-[#1c1444] border-2 border-purple-500/40 rounded-3xl p-5 sm:p-8 max-w-md w-full shadow-2xl relative">
           <button
             type="button"
             onClick={onClose}
-            className="absolute top-4 right-4 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition"
+            className="absolute top-4 right-4 p-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition min-h-[44px] min-w-[44px] flex items-center justify-center"
             title="Cerrar"
+            aria-label="Cerrar modal"
           >
             <X className="w-5 h-5" />
           </button>
@@ -87,7 +88,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                 sounds.playPop();
                 setIsEditingCanvas(true);
               }}
-              className="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-[#ff007a] to-[#ff5900] text-white font-extrabold text-sm shadow-md hover:opacity-90 active:scale-95 transition flex items-center justify-center gap-2"
+              className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-[#ff007a] to-[#ff5900] text-white font-extrabold text-sm shadow-md hover:opacity-90 active:scale-95 transition flex items-center justify-center gap-2 min-h-[44px]"
             >
               <Sparkles className="w-4 h-4" />
               <span>Abrir Lienzo y Redibujar Avatar</span>
@@ -102,21 +103,21 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                   type="text"
                   value={name}
                   onChange={e => setName(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-[#120e28] border border-purple-500/40 rounded-xl text-white text-sm focus:outline-none focus:border-[#ff007a]"
+                  className="w-full px-4 py-3 bg-[#120e28] border border-purple-500/40 rounded-xl text-white text-base sm:text-sm focus:outline-none focus:border-[#ff007a] min-h-[44px]"
                 />
               </div>
 
-              <div className="flex gap-2">
+              <div className="flex gap-2 pt-1">
                 <button
                   type="button"
                   onClick={onClose}
-                  className="w-1/2 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-purple-200 text-xs font-bold transition"
+                  className="w-1/2 py-3 rounded-xl bg-white/10 hover:bg-white/20 text-purple-200 text-sm font-bold transition min-h-[44px]"
                 >
                   Cerrar
                 </button>
                 <button
                   type="submit"
-                  className="w-1/2 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black text-xs font-black transition"
+                  className="w-1/2 py-3 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black text-sm font-black transition min-h-[44px]"
                 >
                   Guardar Nombre
                 </button>

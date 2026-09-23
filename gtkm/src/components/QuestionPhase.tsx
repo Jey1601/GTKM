@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Send, CheckCircle2, Clock, HelpCircle, Sparkles, Loader2, Zap } from 'lucide-react';
+import { Send, CheckCircle2, Clock, HelpCircle, Sparkles, Loader2, Zap, LogOut } from 'lucide-react';
 import { Encuentro, User } from '../types';
 import { submitPlayerAnswers, forceAdvanceToVoting } from '../services/gameService';
 import { sounds } from '../utils/audio';
@@ -8,22 +8,29 @@ interface QuestionPhaseProps {
   encuentro: Encuentro;
   currentUser: User;
   onEncuentroUpdated: (updated: Encuentro) => void;
+  onLeaveEncuentro?: () => void;
 }
 
 export const QuestionPhase: React.FC<QuestionPhaseProps> = ({
   encuentro,
   currentUser,
-  onEncuentroUpdated
+  onEncuentroUpdated,
+  onLeaveEncuentro
 }) => {
-  const currentPlayer = encuentro.players.find(p => p.id === currentUser.id);
-  const alreadyAnswered = currentPlayer?.hasAnsweredAll ?? false;
-  const isHost = encuentro.hostId === currentUser.id;
+  const currentPlayer = encuentro.players.find(
+    p => p.id === currentUser.id || p.nickname.toLowerCase() === currentUser.nickname.toLowerCase()
+  );
+  const [hasSubmittedLocally, setHasSubmittedLocally] = useState(false);
+  const alreadyAnswered = (currentPlayer?.hasAnsweredAll ?? false) || hasSubmittedLocally;
+  const isHost = encuentro.hostId === currentUser.id || currentPlayer?.isHost;
 
   // Respuestas locales para cada pregunta
   const [answers, setAnswers] = useState<Record<string, string>>(() => {
     const initial: Record<string, string> = {};
     encuentro.questions.forEach(q => {
-      const existing = (encuentro.allAnswers || []).find(a => a.playerId === currentUser.id && a.questionId === q.id);
+      const existing = (encuentro.allAnswers || []).find(
+        a => (a.playerId === currentUser.id || a.playerNickname.toLowerCase() === currentUser.nickname.toLowerCase()) && a.questionId === q.id
+      );
       initial[q.id] = existing ? existing.answerText : '';
     });
     return initial;
@@ -76,11 +83,18 @@ export const QuestionPhase: React.FC<QuestionPhaseProps> = ({
         }));
 
         sounds.playSuccess();
-        const updated = await submitPlayerAnswers(encuentro.id, currentUser.id, formattedAnswers);
+        const updated = await submitPlayerAnswers(
+          encuentro.code || encuentro.id, 
+          currentUser.id, 
+          formattedAnswers, 
+          currentUser.nickname
+        );
+        setHasSubmittedLocally(true);
         if (updated) {
           onEncuentroUpdated(updated);
         }
       } catch (err) {
+        console.error('Error al enviar respuestas', err);
         setErrorMsg('Ocurrió un error al sincronizar tus respuestas. Por favor reintenta.');
       } finally {
         setIsSubmitting(false);
@@ -92,7 +106,7 @@ export const QuestionPhase: React.FC<QuestionPhaseProps> = ({
     setIsForcing(true);
     sounds.playFanfare();
     try {
-      const updated = await forceAdvanceToVoting(encuentro.id);
+      const updated = await forceAdvanceToVoting(encuentro.code || encuentro.id);
       if (updated) {
         onEncuentroUpdated(updated);
       }
@@ -188,6 +202,19 @@ export const QuestionPhase: React.FC<QuestionPhaseProps> = ({
                   <Zap className="w-4 h-4" />
                 )}
                 <span>Avanzar a adivinanzas ahora (con los que ya respondieron)</span>
+              </button>
+            </div>
+          )}
+
+          {onLeaveEncuentro && (
+            <div className="pt-3">
+              <button
+                type="button"
+                onClick={onLeaveEncuentro}
+                className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 hover:text-white text-xs font-semibold inline-flex items-center gap-1.5 transition"
+              >
+                <LogOut className="w-3.5 h-3.5 text-pink-400" />
+                <span>Salir de este encuentro</span>
               </button>
             </div>
           )}
