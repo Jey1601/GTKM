@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { PlusCircle, LogIn, Sparkles, Edit3, HelpCircle, Flame, CheckCircle, Dice5, Share2, Sliders } from 'lucide-react';
+import { PlusCircle, LogIn, Sparkles, Edit3, HelpCircle, Flame, CheckCircle, Dice5, Share2, Sliders, Loader2 } from 'lucide-react';
 import { User, Encuentro } from '../types';
-import { createEncuentro, joinEncuentro } from '../services/gameService';
+import { createEncuentro, createEncuentroAsync, joinEncuentro } from '../services/gameService';
 import { DEFAULT_QUESTION_PACKS } from '../data/questions';
 import { sounds } from '../utils/audio';
 
@@ -58,7 +58,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
     }
   };
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
+    if (isCreating) return;
     setErrorMsg(null);
     sounds.playPop();
 
@@ -76,9 +77,20 @@ export const Dashboard: React.FC<DashboardProps> = ({
       }
     }
 
-    const nuevoEncuentro = createEncuentro(currentUser, selectedPackId, customQuestionsList, guessWhoPercentage);
-    sounds.playSuccess();
-    onEnterEncuentro(nuevoEncuentro);
+    setIsCreating(true);
+    try {
+      const nuevoEncuentro = await createEncuentroAsync(currentUser, selectedPackId, customQuestionsList, guessWhoPercentage);
+      sounds.playSuccess();
+      onEnterEncuentro(nuevoEncuentro);
+    } catch (err) {
+      console.error('Error al crear sala en Firestore', err);
+      // Fallback a sincrónico si Firestore falla
+      const nuevoEncuentro = createEncuentro(currentUser, selectedPackId, customQuestionsList, guessWhoPercentage);
+      sounds.playSuccess();
+      onEnterEncuentro(nuevoEncuentro);
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   return (
@@ -361,11 +373,23 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <button
               id="btn-create-encounter"
               type="button"
+              disabled={isCreating}
               onClick={handleCreate}
-              className="w-full py-3.5 px-5 rounded-2xl bg-gradient-to-r from-[#ff007a] via-[#ff5900] to-[#ffd60a] hover:opacity-95 active:scale-[0.98] text-white font-extrabold text-base shadow-[0_4px_25px_rgba(255,0,122,0.4)] transition flex items-center justify-center gap-2"
+              className={`w-full py-3.5 px-5 rounded-2xl bg-gradient-to-r from-[#ff007a] via-[#ff5900] to-[#ffd60a] hover:opacity-95 active:scale-[0.98] text-white font-extrabold text-base shadow-[0_4px_25px_rgba(255,0,122,0.4)] transition flex items-center justify-center gap-2 ${
+                isCreating ? 'opacity-70 cursor-not-allowed' : ''
+              }`}
             >
-              <PlusCircle className="w-5 h-5" />
-              <span>Generar Sala y Código</span>
+              {isCreating ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span>Creando sala en tiempo real...</span>
+                </>
+              ) : (
+                <>
+                  <PlusCircle className="w-5 h-5" />
+                  <span>Generar Sala y Código</span>
+                </>
+              )}
             </button>
           </div>
 

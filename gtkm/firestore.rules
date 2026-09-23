@@ -26,8 +26,8 @@ service cloud.firestore {
       allow get: if isValidId(userId);
       allow list: if true;
       allow create, update: if isValidId(userId)
-        && incoming().name is string && incoming().name.size() > 0 && incoming().name.size() <= 80
-        && incoming().nickname is string && incoming().nickname.size() > 0 && incoming().nickname.size() <= 40
+        && incoming().name is string && incoming().name.size() > 0 && incoming().name.size() <= 100
+        && incoming().nickname is string && incoming().nickname.size() > 0 && incoming().nickname.size() <= 60
         && incoming().avatarDataUrl is string;
       allow delete: if false;
     }
@@ -36,10 +36,7 @@ service cloud.firestore {
     match /encuentros/{code} {
       allow get: if isValidId(code);
       allow list: if true;
-      allow create, update: if isValidId(code)
-        && incoming().code is string && incoming().code.size() <= 10
-        && incoming().title is string && incoming().title.size() <= 120
-        && incoming().status in ['lobby', 'answering', 'voting', 'reveal', 'leaderboard', 'history'];
+      allow create, update: if isValidId(code);
       allow delete: if isValidId(code);
     }
 
@@ -47,9 +44,7 @@ service cloud.firestore {
     match /history/{historyId} {
       allow get: if isValidId(historyId);
       allow list: if true;
-      allow create, update: if isValidId(historyId)
-        && incoming().code is string
-        && incoming().title is string;
+      allow create, update: if isValidId(historyId);
       allow delete: if isValidId(historyId);
     }
   }

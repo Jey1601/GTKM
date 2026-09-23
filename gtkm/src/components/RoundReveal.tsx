@@ -57,7 +57,7 @@ export const RoundReveal: React.FC<RoundRevealProps> = ({
     setIsAdvancing(true);
     sounds.playPop();
     try {
-      const updated = await advanceToNextRoundOrLeaderboard(encuentro.id);
+      const updated = await advanceToNextRoundOrLeaderboard(encuentro.code || encuentro.id);
       if (updated) {
         onEncuentroUpdated(updated);
       }

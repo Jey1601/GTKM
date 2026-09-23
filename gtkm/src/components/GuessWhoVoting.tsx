@@ -38,7 +38,7 @@ export const GuessWhoVoting: React.FC<GuessWhoVotingProps> = ({
     setIsSubmittingVote(true);
 
     try {
-      const updated = await submitVote(encuentro.id, currentUser.id, targetPlayerId);
+      const updated = await submitVote(encuentro.code || encuentro.id, currentUser.id, targetPlayerId);
       if (updated) {
         onEncuentroUpdated(updated);
       }
@@ -53,7 +53,7 @@ export const GuessWhoVoting: React.FC<GuessWhoVotingProps> = ({
     setIsRevealing(true);
     sounds.playDrumroll();
     try {
-      const updated = await revealCurrentRound(encuentro.id);
+      const updated = await revealCurrentRound(encuentro.code || encuentro.id);
       if (updated) {
         onEncuentroUpdated(updated);
       }

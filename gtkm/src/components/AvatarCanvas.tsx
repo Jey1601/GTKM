@@ -380,11 +380,13 @@ export const AvatarCanvas: React.FC<AvatarCanvasProps> = ({
           </div>
         </div>
 
-        {/* Brush Size & Tool Actions */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-white/10">
-          {/* Sizes */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs font-semibold text-purple-300 mr-1">Grosor:</span>
+        {/* Brush Sizes (Equal-width grid that never overflows on small mobile screens) */}
+        <div className="space-y-1.5 pt-2 border-t border-white/10">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-purple-200">Grosor de Trazo</span>
+            <span className="text-[11px] text-pink-300 font-bold">{BRUSH_SIZES.find(b => b.size === brushSize)?.label}</span>
+          </div>
+          <div className="grid grid-cols-4 gap-1.5 w-full bg-black/30 p-1 rounded-xl">
             {BRUSH_SIZES.map(b => (
               <button
                 key={b.size}
@@ -393,60 +395,66 @@ export const AvatarCanvas: React.FC<AvatarCanvasProps> = ({
                   sounds.playClick();
                   setBrushSize(b.size);
                 }}
-                className={`px-2.5 py-1 text-xs rounded-md font-medium transition ${
+                className={`py-1.5 px-1 text-center text-[11px] sm:text-xs rounded-lg font-bold transition flex items-center justify-center gap-1 ${
                   brushSize === b.size
-                    ? 'bg-[#ff007a] text-white font-bold'
-                    : 'bg-white/10 text-purple-200 hover:bg-white/20'
+                    ? 'bg-gradient-to-r from-[#ff007a] to-[#ff5900] text-white shadow-md'
+                    : 'text-purple-300 hover:text-white hover:bg-white/10'
                 }`}
               >
-                {b.label}
+                <span
+                  className="rounded-full bg-current inline-block shrink-0"
+                  style={{ width: `${Math.min(8, Math.max(3, b.size * 0.4))}px`, height: `${Math.min(8, Math.max(3, b.size * 0.4))}px` }}
+                />
+                <span className="truncate">{b.label}</span>
               </button>
             ))}
           </div>
+        </div>
 
-          {/* Action Buttons: Eraser, Undo, Clear */}
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                sounds.playClick();
-                setIsEraser(!isEraser);
-              }}
-              className={`p-2 rounded-xl text-xs font-semibold flex items-center gap-1 transition ${
-                isEraser
-                  ? 'bg-amber-400 text-black shadow-md'
-                  : 'bg-white/10 text-purple-200 hover:bg-white/20'
-              }`}
-              title="Modo Borrador"
-            >
-              <Eraser className="w-4 h-4" />
-              <span className="hidden sm:inline">Borrar</span>
-            </button>
+        {/* Action Buttons: Eraser, Undo, Clear (Responsive 3-column grid) */}
+        <div className="grid grid-cols-3 gap-1.5 sm:gap-2 pt-1">
+          <button
+            type="button"
+            onClick={() => {
+              sounds.playClick();
+              setIsEraser(!isEraser);
+            }}
+            className={`py-2 px-1.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition ${
+              isEraser
+                ? 'bg-amber-400 text-black shadow-md'
+                : 'bg-white/10 text-purple-200 hover:bg-white/20'
+            }`}
+            title="Modo Borrador"
+          >
+            <Eraser className="w-3.5 h-3.5 shrink-0" />
+            <span className="truncate">{isEraser ? 'Borrando' : 'Borrador'}</span>
+          </button>
 
-            <button
-              type="button"
-              onClick={handleUndo}
-              disabled={history.length <= 1}
-              className="p-2 rounded-xl text-xs font-semibold bg-white/10 text-purple-200 hover:bg-white/20 disabled:opacity-30 disabled:cursor-not-allowed transition"
-              title="Deshacer trazo"
-            >
-              <RotateCcw className="w-4 h-4" />
-            </button>
+          <button
+            type="button"
+            onClick={handleUndo}
+            disabled={history.length <= 1}
+            className="py-2 px-1.5 rounded-xl text-xs font-bold bg-white/10 text-purple-200 hover:bg-white/20 disabled:opacity-30 disabled:cursor-not-allowed transition flex items-center justify-center gap-1.5"
+            title="Deshacer trazo"
+          >
+            <RotateCcw className="w-3.5 h-3.5 shrink-0" />
+            <span className="truncate">Deshacer</span>
+          </button>
 
-            <button
-              type="button"
-              onClick={handleClear}
-              className="p-2 rounded-xl text-xs font-semibold bg-red-500/20 text-red-300 hover:bg-red-500/30 transition"
-              title="Limpiar todo"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={handleClear}
+            className="py-2 px-1.5 rounded-xl text-xs font-bold bg-red-500/20 text-red-300 hover:bg-red-500/30 transition flex items-center justify-center gap-1.5"
+            title="Limpiar todo"
+          >
+            <Trash2 className="w-3.5 h-3.5 shrink-0" />
+            <span className="truncate">Limpiar</span>
+          </button>
         </div>
       </div>
 
       {/* Footer buttons */}
-      <div className="flex items-center justify-end gap-3 mt-5">
+      <div className="flex flex-col-reverse sm:flex-row items-center justify-end gap-2.5 mt-4 sm:mt-5">
         {onCancel && (
           <button
             type="button"
@@ -454,7 +462,7 @@ export const AvatarCanvas: React.FC<AvatarCanvasProps> = ({
               sounds.playClick();
               onCancel();
             }}
-            className="px-5 py-2.5 rounded-xl text-purple-200 hover:text-white hover:bg-white/10 font-bold transition text-sm"
+            className="w-full sm:w-auto px-4 py-2.5 rounded-xl text-purple-300 hover:text-white hover:bg-white/10 font-bold transition text-xs sm:text-sm text-center"
           >
             Cancelar
           </button>
@@ -463,9 +471,10 @@ export const AvatarCanvas: React.FC<AvatarCanvasProps> = ({
           id="btn-save-avatar"
           type="button"
           onClick={handleSave}
-          className="px-7 py-3 rounded-2xl bg-gradient-to-r from-[#ff007a] to-[#ff5900] hover:from-[#ff1a8c] hover:to-[#ff6a1a] text-white font-extrabold text-base shadow-[0_4px_20px_rgba(255,0,122,0.4)] active:scale-95 transition flex items-center gap-2"
+          className="w-full sm:w-auto px-6 py-3 rounded-2xl bg-gradient-to-r from-[#ff007a] to-[#ff5900] hover:from-[#ff1a8c] hover:to-[#ff6a1a] text-white font-black text-sm sm:text-base shadow-[0_4px_20px_rgba(255,0,122,0.4)] active:scale-95 transition flex items-center justify-center gap-2"
         >
-          <Check className="w-5 h-5 stroke-[3]" /> ¡Guardar mi Avatar!
+          <Check className="w-5 h-5 stroke-[3]" />
+          <span>¡Guardar mi Avatar!</span>
         </button>
       </div>
     </div>

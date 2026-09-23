@@ -80,6 +80,17 @@ export function getCurrentUser(): User | null {
   }
 }
 
+export function getCleanRoomCode(codeOrId: string): string {
+  if (!codeOrId) return '';
+  const clean = codeOrId.trim().toUpperCase();
+  if (clean.startsWith('ENC_')) {
+    const parts = clean.split('_');
+    const last = parts[parts.length - 1];
+    if (last && last.length >= 3) return last;
+  }
+  return clean;
+}
+
 export function saveCurrentUser(user: User): void {
   try {
     localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(user));
@@ -93,6 +104,7 @@ export function saveCurrentUser(user: User): void {
       id: user.id,
       name: user.name,
       nickname: user.nickname,
+      cleanNickname: user.nickname.trim().toLowerCase(),
       avatarDataUrl: user.avatarDataUrl,
       createdAt: user.createdAt || Date.now()
     });
@@ -132,8 +144,12 @@ export async function loginUserAsync(
 
   // 2. Si no está en caché local, buscar en la colección de Firestore (para otros dispositivos)
   try {
-    const q = query(collection(db, 'users'), where('nickname', '==', cleanNick));
-    const snap = await getDocs(q);
+    const q = query(collection(db, 'users'), where('cleanNickname', '==', cleanNick));
+    let snap = await getDocs(q);
+    if (snap.empty) {
+      const qAlt = query(collection(db, 'users'), where('nickname', '==', nickname.trim()));
+      snap = await getDocs(qAlt);
+    }
     if (!snap.empty) {
       const userData = snap.docs[0].data() as User;
       if (password && userData.password && userData.password !== password) {
@@ -162,8 +178,12 @@ export async function registerUserAsync(
 
   // 2. Verificar en Firestore
   try {
-    const q = query(collection(db, 'users'), where('nickname', '==', cleanNick));
-    const snap = await getDocs(q);
+    const q = query(collection(db, 'users'), where('cleanNickname', '==', cleanNick));
+    let snap = await getDocs(q);
+    if (snap.empty) {
+      const qAlt = query(collection(db, 'users'), where('nickname', '==', newUser.nickname.trim()));
+      snap = await getDocs(qAlt);
+    }
     if (!snap.empty) {
       return { success: false, error: `El nickname "@${cleanNick}" ya está registrado. Elige otro o inicia sesión.` };
     }
@@ -185,8 +205,8 @@ export function getEncuentro(codeOrId: string): Encuentro | null {
   try {
     const raw = localStorage.getItem(ENCUENTROS_KEY);
     const encuentros: Record<string, Encuentro> = raw ? JSON.parse(raw) : {};
-    const cleanCode = codeOrId.trim().toUpperCase();
-    return encuentros[cleanCode] || Object.values(encuentros).find(e => e.id === codeOrId) || null;
+    const cleanCode = getCleanRoomCode(codeOrId);
+    return encuentros[cleanCode] || Object.values(encuentros).find(e => getCleanRoomCode(e.code) === cleanCode || e.id === codeOrId) || null;
   } catch (e) {
     console.error('Error al leer encuentro', e);
     return null;
@@ -216,27 +236,54 @@ export function saveEncuentroToLocalStorageAndSync(encuentro: Encuentro): void {
   try {
     const raw = localStorage.getItem(ENCUENTROS_KEY);
     const encuentros: Record<string, Encuentro> = raw ? JSON.parse(raw) : {};
+    const cleanCode = getCleanRoomCode(encuentro.code);
     const updated = {
       ...encuentro,
+      id: cleanCode,
+      code: cleanCode,
       updatedAt: Date.now()
     };
-    encuentros[encuentro.code.toUpperCase()] = updated;
+    encuentros[cleanCode] = updated;
     localStorage.setItem(ENCUENTROS_KEY, JSON.stringify(encuentros));
 
     if (syncChannel) {
-      syncChannel.postMessage({ type: 'ENCUENTRO_UPDATED', code: encuentro.code });
+      syncChannel.postMessage({ type: 'ENCUENTRO_UPDATED', code: cleanCode, encuentro: updated });
     }
   } catch (e) {
     console.error('Error al guardar en caché local', e);
   }
 }
 
-export function saveEncuentro(encuentro: Encuentro): void {
-  saveEncuentroToLocalStorageAndSync(encuentro);
+export async function saveEncuentroAsync(encuentro: Encuentro): Promise<void> {
+  const cleanCode = getCleanRoomCode(encuentro.code);
+  const normalized: Encuentro = {
+    ...encuentro,
+    id: cleanCode,
+    code: cleanCode,
+    updatedAt: Date.now()
+  };
+  saveEncuentroToLocalStorageAndSync(normalized);
   try {
-    const sanitized = sanitizeForFirestore(encuentro);
-    setDoc(doc(db, 'encuentros', encuentro.code.toUpperCase()), sanitized, { merge: true }).catch(err => {
-      handleFirestoreError(err, OperationType.WRITE, `encuentros/${encuentro.code.toUpperCase()}`);
+    const sanitized = sanitizeForFirestore(normalized);
+    await setDoc(doc(db, 'encuentros', cleanCode), sanitized, { merge: true });
+  } catch (e) {
+    handleFirestoreError(e, OperationType.WRITE, `encuentros/${cleanCode}`);
+  }
+}
+
+export function saveEncuentro(encuentro: Encuentro): void {
+  const cleanCode = getCleanRoomCode(encuentro.code);
+  const normalized: Encuentro = {
+    ...encuentro,
+    id: cleanCode,
+    code: cleanCode,
+    updatedAt: Date.now()
+  };
+  saveEncuentroToLocalStorageAndSync(normalized);
+  try {
+    const sanitized = sanitizeForFirestore(normalized);
+    setDoc(doc(db, 'encuentros', cleanCode), sanitized, { merge: true }).catch(err => {
+      handleFirestoreError(err, OperationType.WRITE, `encuentros/${cleanCode}`);
     });
   } catch (e) {
     console.error('Error al persistir en Firestore', e);
@@ -253,6 +300,65 @@ export function generateRoomCode(): string {
     result += chars.charAt(Math.floor(Math.random() * chars.length));
   }
   return result;
+}
+
+/**
+ * Crea un nuevo Encuentro de forma asíncrona asegurando su registro en Firestore
+ */
+export async function createEncuentroAsync(
+  hostUser: User, 
+  packId: string = 'pack_amigos',
+  customQuestionTexts?: string[],
+  guessWhoPercentage: number = 70
+): Promise<Encuentro> {
+  const code = generateRoomCode();
+  const selectedPack = DEFAULT_QUESTION_PACKS.find(p => p.id === packId) || DEFAULT_QUESTION_PACKS[0];
+  
+  let questions = [...selectedPack.questions];
+  if (customQuestionTexts && customQuestionTexts.length > 0) {
+    const customQuestions = customQuestionTexts
+      .filter(t => t.trim().length > 0)
+      .map((text, i) => ({
+        id: `custom_q_${i + 1}_${Date.now()}`,
+        text: text.trim(),
+        category: 'Personalizada'
+      }));
+    if (customQuestions.length > 0) {
+      questions = customQuestions;
+    }
+  }
+
+  const hostPlayer: Player = {
+    id: hostUser.id,
+    name: hostUser.name,
+    nickname: hostUser.nickname,
+    avatarDataUrl: hostUser.avatarDataUrl,
+    isHost: true,
+    score: 0,
+    hasAnsweredAll: false
+  };
+
+  const clampedPercentage = Math.min(100, Math.max(10, Math.round(guessWhoPercentage || 70)));
+
+  const nuevoEncuentro: Encuentro = {
+    id: code,
+    code,
+    hostId: hostUser.id,
+    title: selectedPack.name,
+    status: 'lobby',
+    players: [hostPlayer],
+    questions,
+    allAnswers: [],
+    guessWhoRounds: [],
+    currentRoundIndex: 0,
+    totalSelectedRounds: 0,
+    guessWhoPercentage: clampedPercentage,
+    createdAt: Date.now(),
+    updatedAt: Date.now()
+  };
+
+  await saveEncuentroAsync(nuevoEncuentro);
+  return nuevoEncuentro;
 }
 
 /**
@@ -294,7 +400,7 @@ export function createEncuentro(
   const clampedPercentage = Math.min(100, Math.max(10, Math.round(guessWhoPercentage || 70)));
 
   const nuevoEncuentro: Encuentro = {
-    id: `enc_${Date.now()}_${code}`,
+    id: code,
     code,
     hostId: hostUser.id,
     title: selectedPack.name,
@@ -321,7 +427,8 @@ export function updateEncuentroSettings(
   encuentroId: string, 
   settings: { guessWhoPercentage?: number; title?: string }
 ): Encuentro | null {
-  const encuentro = getEncuentro(encuentroId);
+  const cleanCode = getCleanRoomCode(encuentroId);
+  const encuentro = getEncuentro(cleanCode);
   if (!encuentro) return null;
 
   if (settings.guessWhoPercentage !== undefined) {
@@ -342,7 +449,7 @@ export async function joinEncuentro(
   code: string, 
   user: User
 ): Promise<{ success: boolean; encuentro?: Encuentro; error?: string }> {
-  const cleanCode = code.trim().toUpperCase();
+  const cleanCode = getCleanRoomCode(code);
   if (!cleanCode) {
     return { success: false, error: 'Por favor introduce un código de encuentro válido.' };
   }
@@ -359,20 +466,10 @@ export async function joinEncuentro(
         if (local) {
           encuentroData = local;
         } else {
-          return { success: false, error: 'No se encontró ningún encuentro con ese código. Verifica que esté bien escrito.' };
+          return { success: false, error: `No se encontró ningún encuentro activo con el código "${cleanCode}". Verifica que esté bien escrito.` };
         }
       } else {
         encuentroData = snap.data() as Encuentro;
-      }
-
-      if (encuentroData.status !== 'lobby') {
-        const existingPlayer = encuentroData.players.find(
-          p => p.id === user.id || p.nickname.toLowerCase() === user.nickname.toLowerCase()
-        );
-        if (existingPlayer) {
-          return { success: true, encuentro: encuentroData };
-        }
-        return { success: false, error: 'La partida de este encuentro ya ha comenzado.' };
       }
 
       const players = [...encuentroData.players];
@@ -380,9 +477,29 @@ export async function joinEncuentro(
         p => p.id === user.id || p.nickname.toLowerCase() === user.nickname.toLowerCase()
       );
 
+      // Si la partida ya comenzó, permitir reconexión o ingreso si ya estaba en la lista
+      if (encuentroData.status !== 'lobby') {
+        if (existingIdx >= 0) {
+          players[existingIdx] = {
+            ...players[existingIdx],
+            id: user.id,
+            name: user.name,
+            nickname: user.nickname,
+            avatarDataUrl: user.avatarDataUrl || players[existingIdx].avatarDataUrl
+          };
+          encuentroData.players = players;
+          encuentroData.updatedAt = Date.now();
+          const sanitized = sanitizeForFirestore(encuentroData);
+          transaction.set(docRef, sanitized, { merge: true });
+          return { success: true, encuentro: encuentroData };
+        }
+        return { success: false, error: 'La partida de este encuentro ya ha comenzado.' };
+      }
+
       if (existingIdx >= 0) {
         players[existingIdx] = {
           ...players[existingIdx],
+          id: user.id,
           name: user.name,
           nickname: user.nickname,
           avatarDataUrl: user.avatarDataUrl || players[existingIdx].avatarDataUrl
@@ -401,6 +518,8 @@ export async function joinEncuentro(
 
       const updatedEncuentro: Encuentro = {
         ...encuentroData,
+        id: cleanCode,
+        code: cleanCode,
         players,
         updatedAt: Date.now()
       };
@@ -416,11 +535,59 @@ export async function joinEncuentro(
     }
     return result;
   } catch (error) {
-    console.warn('Transacción Firestore joinEncuentro reintentando fallback local', error);
+    console.warn('Transacción Firestore joinEncuentro reintentando con lectura directa', error);
+    try {
+      const snap = await getDoc(docRef);
+      if (snap.exists()) {
+        const encuentroData = snap.data() as Encuentro;
+        const players = [...encuentroData.players];
+        const existingIdx = players.findIndex(
+          p => p.id === user.id || p.nickname.toLowerCase() === user.nickname.toLowerCase()
+        );
+        if (existingIdx >= 0) {
+          players[existingIdx] = {
+            ...players[existingIdx],
+            id: user.id,
+            name: user.name,
+            nickname: user.nickname,
+            avatarDataUrl: user.avatarDataUrl || players[existingIdx].avatarDataUrl
+          };
+        } else if (encuentroData.status === 'lobby') {
+          players.push({
+            id: user.id,
+            name: user.name,
+            nickname: user.nickname,
+            avatarDataUrl: user.avatarDataUrl,
+            isHost: false,
+            score: 0,
+            hasAnsweredAll: false
+          });
+        }
+        const updatedEncuentro: Encuentro = {
+          ...encuentroData,
+          id: cleanCode,
+          code: cleanCode,
+          players,
+          updatedAt: Date.now()
+        };
+        const sanitized = sanitizeForFirestore(updatedEncuentro);
+        await setDoc(docRef, sanitized, { merge: true });
+        saveEncuentroToLocalStorageAndSync(updatedEncuentro);
+        return { success: true, encuentro: updatedEncuentro };
+      }
+    } catch (e2) {
+      console.warn('Error en lectura directa fallback de joinEncuentro', e2);
+    }
+
     const local = getEncuentro(cleanCode);
     if (local) {
-      const exists = local.players.some(p => p.id === user.id || p.nickname.toLowerCase() === user.nickname.toLowerCase());
-      if (!exists && local.status === 'lobby') {
+      const existingIdx = local.players.findIndex(
+        p => p.id === user.id || p.nickname.toLowerCase() === user.nickname.toLowerCase()
+      );
+      if (existingIdx >= 0) {
+        local.players[existingIdx].avatarDataUrl = user.avatarDataUrl || local.players[existingIdx].avatarDataUrl;
+        local.players[existingIdx].id = user.id;
+      } else if (local.status === 'lobby') {
         local.players.push({
           id: user.id,
           name: user.name,
@@ -430,11 +597,11 @@ export async function joinEncuentro(
           score: 0,
           hasAnsweredAll: false
         });
-        saveEncuentro(local);
       }
+      saveEncuentro(local);
       return { success: true, encuentro: local };
     }
-    return { success: false, error: 'Error de conexión con la sala. Por favor reintenta.' };
+    return { success: false, error: 'Error de conexión al unirse al encuentro. Revisa el código e intenta de nuevo.' };
   }
 }
 
@@ -442,8 +609,8 @@ export async function joinEncuentro(
  * Añade jugadores simulados (Bots) para probar el juego en solitario de forma divertida e instantánea
  */
 export async function addSampleBots(encuentroId: string): Promise<Encuentro | null> {
-  const localEncuentro = getEncuentro(encuentroId);
-  const cleanCode = (localEncuentro ? localEncuentro.code : encuentroId).trim().toUpperCase();
+  const cleanCode = getCleanRoomCode(encuentroId);
+  const localEncuentro = getEncuentro(cleanCode);
   const docRef = doc(db, 'encuentros', cleanCode);
 
   try {
@@ -512,8 +679,8 @@ export async function addSampleBots(encuentroId: string): Promise<Encuentro | nu
  * Inicia la partida desde el Lobby a la Fase de Preguntas (con transacción atómica)
  */
 export async function startGame(encuentroId: string): Promise<Encuentro | null> {
-  const localEncuentro = getEncuentro(encuentroId);
-  const cleanCode = (localEncuentro ? localEncuentro.code : encuentroId).trim().toUpperCase();
+  const cleanCode = getCleanRoomCode(encuentroId);
+  const localEncuentro = getEncuentro(cleanCode);
   const docRef = doc(db, 'encuentros', cleanCode);
 
   try {
@@ -578,7 +745,14 @@ export async function startGame(encuentroId: string): Promise<Encuentro | null> 
       p.hasAnsweredAll = false;
       p.score = 0;
     });
-    saveEncuentro(localEncuentro);
+    localEncuentro.updatedAt = Date.now();
+    try {
+      const sanitized = sanitizeForFirestore(localEncuentro);
+      await setDoc(docRef, sanitized, { merge: true });
+    } catch (e2) {
+      console.warn('Error al guardar estado answering en Firestore fallback', e2);
+    }
+    saveEncuentroToLocalStorageAndSync(localEncuentro);
     return localEncuentro;
   }
   return null;
@@ -624,11 +798,12 @@ export function calculateAndBuildGuessWhoRounds(
 export async function submitPlayerAnswers(
   encuentroId: string, 
   playerId: string, 
-  answers: { questionId: string; answerText: string }[]
+  answers: { questionId: string; answerText: string }[],
+  playerNickname?: string
 ): Promise<Encuentro | null> {
-  const localEncuentro = getEncuentro(encuentroId);
-  const cleanCode = (localEncuentro ? localEncuentro.code : encuentroId).trim().toUpperCase();
+  const cleanCode = getCleanRoomCode(encuentroId);
   const docRef = doc(db, 'encuentros', cleanCode);
+  const localEncuentro = getEncuentro(cleanCode);
 
   try {
     const updated = await runTransaction(db, async (transaction) => {
@@ -641,14 +816,34 @@ export async function submitPlayerAnswers(
         encuentroData = snap.data() as Encuentro;
       }
 
-      const player = encuentroData.players.find(p => p.id === playerId);
+      // Buscar al jugador por ID o por nickname
+      let player = encuentroData.players.find(
+        p => p.id === playerId || (playerNickname && p.nickname.toLowerCase() === playerNickname.toLowerCase())
+      );
+
+      // Si no existe, agregarlo a la lista de jugadores defensivamente para evitar pérdida de datos
       if (!player) {
-        console.warn(`Jugador ${playerId} no encontrado en el encuentro`);
-        return null;
+        player = {
+          id: playerId,
+          name: playerNickname || 'Jugador',
+          nickname: playerNickname || 'jugador',
+          avatarDataUrl: '',
+          isHost: false,
+          score: 0,
+          hasAnsweredAll: true
+        };
+        encuentroData.players.push(player);
+      } else {
+        player.id = playerId;
+        player.hasAnsweredAll = true;
       }
 
-      // Filtrar respuestas previas de este jugador si existieran
-      let updatedAllAnswers = (encuentroData.allAnswers || []).filter(a => a.playerId !== playerId);
+      // Filtrar respuestas previas de este jugador
+      const targetPlayerId = player.id;
+      const targetNick = player.nickname.toLowerCase();
+      let updatedAllAnswers = (encuentroData.allAnswers || []).filter(
+        a => a.playerId !== targetPlayerId && a.playerNickname.toLowerCase() !== targetNick
+      );
 
       // Agregar las nuevas respuestas
       answers.forEach(ans => {
@@ -657,19 +852,17 @@ export async function submitPlayerAnswers(
           updatedAllAnswers.push({
             questionId: questionObj.id,
             questionText: questionObj.text,
-            playerId: player.id,
-            playerNickname: player.nickname,
-            playerName: player.name,
-            playerAvatar: player.avatarDataUrl,
+            playerId: player!.id,
+            playerNickname: player!.nickname,
+            playerName: player!.name,
+            playerAvatar: player!.avatarDataUrl,
             answerText: ans.answerText.trim()
           });
         }
       });
 
-      player.hasAnsweredAll = true;
-
       // Comprobar si el 100% de los jugadores ya contestó
-      const allFinished = encuentroData.players.every(p => p.hasAnsweredAll);
+      const allFinished = encuentroData.players.length > 0 && encuentroData.players.every(p => p.hasAnsweredAll);
 
       let nextStatus = encuentroData.status;
       let guessWhoRounds = encuentroData.guessWhoRounds || [];
@@ -688,6 +881,8 @@ export async function submitPlayerAnswers(
 
       const updatedEncuentro: Encuentro = {
         ...encuentroData,
+        id: cleanCode,
+        code: cleanCode,
         allAnswers: updatedAllAnswers,
         players: encuentroData.players,
         guessWhoRounds,
@@ -713,48 +908,65 @@ export async function submitPlayerAnswers(
 
   // Fallback local en caso de error de red
   if (localEncuentro) {
-    const player = localEncuentro.players.find(p => p.id === playerId);
-    if (player) {
-      localEncuentro.allAnswers = localEncuentro.allAnswers.filter(a => a.playerId !== playerId);
-      answers.forEach(ans => {
-        const questionObj = localEncuentro.questions.find(q => q.id === ans.questionId);
-        if (questionObj) {
-          localEncuentro.allAnswers.push({
-            questionId: questionObj.id,
-            questionText: questionObj.text,
-            playerId: player.id,
-            playerNickname: player.nickname,
-            playerName: player.name,
-            playerAvatar: player.avatarDataUrl,
-            answerText: ans.answerText.trim()
-          });
-        }
-      });
+    let player = localEncuentro.players.find(
+      p => p.id === playerId || (playerNickname && p.nickname.toLowerCase() === playerNickname.toLowerCase())
+    );
+    if (!player) {
+      player = {
+        id: playerId,
+        name: playerNickname || 'Jugador',
+        nickname: playerNickname || 'jugador',
+        avatarDataUrl: '',
+        isHost: false,
+        score: 0,
+        hasAnsweredAll: true
+      };
+      localEncuentro.players.push(player);
+    } else {
+      player.id = playerId;
       player.hasAnsweredAll = true;
-      if (localEncuentro.players.every(p => p.hasAnsweredAll)) {
-        localEncuentro.guessWhoRounds = calculateAndBuildGuessWhoRounds(
-          localEncuentro.allAnswers, 
-          localEncuentro.guessWhoPercentage ?? 70
-        );
-        localEncuentro.totalSelectedRounds = localEncuentro.guessWhoRounds.length;
-        localEncuentro.currentRoundIndex = 0;
-        localEncuentro.status = 'voting';
-      }
-      saveEncuentro(localEncuentro);
-      return localEncuentro;
     }
+
+    const targetPlayerId = player.id;
+    const targetNick = player.nickname.toLowerCase();
+    localEncuentro.allAnswers = (localEncuentro.allAnswers || []).filter(
+      a => a.playerId !== targetPlayerId && a.playerNickname.toLowerCase() !== targetNick
+    );
+
+    answers.forEach(ans => {
+      const questionObj = localEncuentro.questions.find(q => q.id === ans.questionId);
+      if (questionObj) {
+        localEncuentro.allAnswers.push({
+          questionId: questionObj.id,
+          questionText: questionObj.text,
+          playerId: player!.id,
+          playerNickname: player!.nickname,
+          playerName: player!.name,
+          playerAvatar: player!.avatarDataUrl,
+          answerText: ans.answerText.trim()
+        });
+      }
+    });
+
+    if (localEncuentro.players.every(p => p.hasAnsweredAll)) {
+      localEncuentro.guessWhoRounds = calculateAndBuildGuessWhoRounds(
+        localEncuentro.allAnswers, 
+        localEncuentro.guessWhoPercentage ?? 70
+      );
+      localEncuentro.totalSelectedRounds = localEncuentro.guessWhoRounds.length;
+      localEncuentro.currentRoundIndex = 0;
+      localEncuentro.status = 'voting';
+    }
+    saveEncuentro(localEncuentro);
+    return localEncuentro;
   }
 
   return null;
 }
 
-/**
- * Función de escape para el Anfitrión: Avanzar a adivinanzas de inmediato
- * con las respuestas que hayan llegado hasta el momento si alguien se desconectó
- */
 export async function forceAdvanceToVoting(encuentroId: string): Promise<Encuentro | null> {
-  const localEncuentro = getEncuentro(encuentroId);
-  const cleanCode = (localEncuentro ? localEncuentro.code : encuentroId).trim().toUpperCase();
+  const cleanCode = getCleanRoomCode(encuentroId);
+  const localEncuentro = getEncuentro(cleanCode);
   const docRef = doc(db, 'encuentros', cleanCode);
 
   try {
@@ -772,6 +984,8 @@ export async function forceAdvanceToVoting(encuentroId: string): Promise<Encuent
 
       const updatedEncuentro: Encuentro = {
         ...encuentroData,
+        id: cleanCode,
+        code: cleanCode,
         guessWhoRounds,
         totalSelectedRounds: guessWhoRounds.length,
         currentRoundIndex: 0,
@@ -814,8 +1028,8 @@ export async function submitVote(
   voterPlayerId: string, 
   guessedAuthorPlayerId: string
 ): Promise<Encuentro | null> {
-  const localEncuentro = getEncuentro(encuentroId);
-  const cleanCode = (localEncuentro ? localEncuentro.code : encuentroId).trim().toUpperCase();
+  const cleanCode = getCleanRoomCode(encuentroId);
+  const localEncuentro = getEncuentro(cleanCode);
   const docRef = doc(db, 'encuentros', cleanCode);
 
   try {
@@ -873,8 +1087,8 @@ export async function submitVote(
  * Revelar el autor real de la ronda actual y calcular puntuaciones (transaccional)
  */
 export async function revealCurrentRound(encuentroId: string): Promise<Encuentro | null> {
-  const localEncuentro = getEncuentro(encuentroId);
-  const cleanCode = (localEncuentro ? localEncuentro.code : encuentroId).trim().toUpperCase();
+  const cleanCode = getCleanRoomCode(encuentroId);
+  const localEncuentro = getEncuentro(cleanCode);
   const docRef = doc(db, 'encuentros', cleanCode);
 
   try {
@@ -1301,8 +1515,8 @@ export function seedInitialHistoryIfEmpty(): void {
  * Avanzar a la siguiente ronda o pasar al podio / tabla de posiciones (transaccional)
  */
 export async function advanceToNextRoundOrLeaderboard(encuentroId: string): Promise<Encuentro | null> {
-  const localEncuentro = getEncuentro(encuentroId);
-  const cleanCode = (localEncuentro ? localEncuentro.code : encuentroId).trim().toUpperCase();
+  const cleanCode = getCleanRoomCode(encuentroId);
+  const localEncuentro = getEncuentro(cleanCode);
   const docRef = doc(db, 'encuentros', cleanCode);
 
   try {
@@ -1353,7 +1567,8 @@ export async function advanceToNextRoundOrLeaderboard(encuentroId: string): Prom
  * Ver resumen e historial completo del encuentro
  */
 export function viewEncuentroHistory(encuentroId: string): Encuentro | null {
-  const encuentro = getEncuentro(encuentroId);
+  const cleanCode = getCleanRoomCode(encuentroId);
+  const encuentro = getEncuentro(cleanCode);
   if (!encuentro) return null;
 
   encuentro.status = 'history';
@@ -1366,8 +1581,8 @@ export function viewEncuentroHistory(encuentroId: string): Encuentro | null {
  * Reiniciar partida para volver a jugar (transaccional)
  */
 export async function restartEncuentroGame(encuentroId: string): Promise<Encuentro | null> {
-  const localEncuentro = getEncuentro(encuentroId);
-  const cleanCode = (localEncuentro ? localEncuentro.code : encuentroId).trim().toUpperCase();
+  const cleanCode = getCleanRoomCode(encuentroId);
+  const localEncuentro = getEncuentro(cleanCode);
   const docRef = doc(db, 'encuentros', cleanCode);
 
   try {
@@ -1417,18 +1632,59 @@ export async function restartEncuentroGame(encuentroId: string): Promise<Encuent
 }
 
 /**
- * Hook helper para suscribirse a cambios de encuentro en tiempo real (BroadcastChannel + Cloud Firestore onSnapshot)
+ * Sincronización manual bajo demanda desde Firestore a memoria local
  */
-export function subscribeToEncuentroUpdates(callback: (code: string) => void, activeRoomCode?: string): () => void {
+export async function syncEncuentroNow(roomCode: string): Promise<Encuentro | null> {
+  const cleanCode = getCleanRoomCode(roomCode);
+  if (!cleanCode) return null;
+  try {
+    const docRef = doc(db, 'encuentros', cleanCode);
+    let freshData: Encuentro | null = null;
+    try {
+      const snap = await getDoc(docRef);
+      if (snap.exists()) {
+        freshData = snap.data() as Encuentro;
+      }
+    } catch {
+      // ignore
+    }
+
+    if (freshData) {
+      saveEncuentroToLocalStorageAndSync(freshData);
+      return freshData;
+    }
+  } catch (err) {
+    handleFirestoreError(err, OperationType.GET, `encuentros/${cleanCode}`);
+  }
+  return getEncuentro(cleanCode);
+}
+
+/**
+ * Hook helper para suscribirse a cambios de encuentro en tiempo real (BroadcastChannel + Cloud Firestore onSnapshot + Polling activo)
+ */
+export function subscribeToEncuentroUpdates(
+  callback: (code: string, updatedEncuentro?: Encuentro) => void, 
+  activeRoomCode?: string
+): () => void {
+  const cleanCode = activeRoomCode ? getCleanRoomCode(activeRoomCode) : '';
+
   const handler = (event: MessageEvent) => {
     if (event.data && event.data.type === 'ENCUENTRO_UPDATED') {
-      callback(event.data.code);
+      const msgCode = event.data.code ? getCleanRoomCode(event.data.code) : '';
+      if (!cleanCode || msgCode === cleanCode) {
+        callback(msgCode, event.data.encuentro);
+      }
     }
   };
 
   const storageHandler = (event: StorageEvent) => {
     if (event.key === ENCUENTROS_KEY) {
-      callback('');
+      if (cleanCode) {
+        const enc = getEncuentro(cleanCode);
+        callback(cleanCode, enc || undefined);
+      } else {
+        callback('');
+      }
     }
   };
 
@@ -1437,24 +1693,16 @@ export function subscribeToEncuentroUpdates(callback: (code: string) => void, ac
   }
   window.addEventListener('storage', storageHandler);
 
-  // Escuchar en tiempo real en Cloud Firestore si hay una sala activa
+  // 1. Escuchar en tiempo real en Cloud Firestore si hay una sala activa
   let unsubscribeFirestore: (() => void) | null = null;
-  if (activeRoomCode) {
-    const cleanCode = activeRoomCode.trim().toUpperCase();
+  if (cleanCode) {
     try {
       const docRef = doc(db, 'encuentros', cleanCode);
       unsubscribeFirestore = onSnapshot(docRef, (docSnap) => {
         if (docSnap.exists()) {
           const data = docSnap.data() as Encuentro;
-          try {
-            const raw = localStorage.getItem(ENCUENTROS_KEY);
-            const encuentros: Record<string, Encuentro> = raw ? JSON.parse(raw) : {};
-            encuentros[cleanCode] = data;
-            localStorage.setItem(ENCUENTROS_KEY, JSON.stringify(encuentros));
-          } catch (e) {
-            // ignore
-          }
-          callback(cleanCode);
+          saveEncuentroToLocalStorageAndSync(data);
+          callback(cleanCode, data);
         }
       }, (error) => {
         handleFirestoreError(error, OperationType.GET, `encuentros/${cleanCode}`);
@@ -1464,11 +1712,63 @@ export function subscribeToEncuentroUpdates(callback: (code: string) => void, ac
     }
   }
 
+  // 2. Polling activo continuo (cada 2 segundos) para garantizar que dispositivos móviles en segundo plano
+  // o navegadores con sockets suspendidos (Safari iOS / Brave) reciban los cambios automáticamente
+  let pollInterval: ReturnType<typeof setInterval> | null = null;
+  if (cleanCode) {
+    pollInterval = setInterval(async () => {
+      try {
+        const docRef = doc(db, 'encuentros', cleanCode);
+        const snap = await getDoc(docRef);
+        if (snap.exists()) {
+          const data = snap.data() as Encuentro;
+          saveEncuentroToLocalStorageAndSync(data);
+          callback(cleanCode, data);
+        }
+      } catch {
+        // Silencioso ante pérdidas momentáneas de conexión
+      }
+    }, 2000);
+  }
+
+  // 3. Re-sincronizar inmediatamente al volver a la pestaña o desbloquear el móvil
+  const visibilityHandler = async () => {
+    if (typeof document !== 'undefined' && document.visibilityState === 'visible' && cleanCode) {
+      try {
+        const docRef = doc(db, 'encuentros', cleanCode);
+        const snap = await getDoc(docRef);
+        if (snap.exists()) {
+          const data = snap.data() as Encuentro;
+          saveEncuentroToLocalStorageAndSync(data);
+          callback(cleanCode, data);
+        }
+      } catch {
+        // Silencioso
+      }
+    }
+  };
+
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', visibilityHandler);
+  }
+  if (typeof window !== 'undefined') {
+    window.addEventListener('focus', visibilityHandler);
+  }
+
   return () => {
     if (syncChannel) {
       syncChannel.removeEventListener('message', handler);
     }
     window.removeEventListener('storage', storageHandler);
+    if (typeof document !== 'undefined') {
+      document.removeEventListener('visibilitychange', visibilityHandler);
+    }
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('focus', visibilityHandler);
+    }
+    if (pollInterval) {
+      clearInterval(pollInterval);
+    }
     if (unsubscribeFirestore) {
       unsubscribeFirestore();
     }

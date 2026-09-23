@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
@@ -12,6 +12,15 @@ export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 
 // Inicializar Auth
 export const auth = getAuth(app);
+
+// Autenticar anónimamente de forma silenciosa para asegurar sesión activa en Firestore
+try {
+  signInAnonymously(auth).catch(() => {
+    // Si la autenticación anónima no está habilitada en el proyecto, Firestore continuará sin auth
+  });
+} catch {
+  // Ignorar errores en navegadores restrictivos
+}
 
 // Tipos para manejo de errores de Firestore según especificación
 export enum OperationType {

@@ -3,6 +3,7 @@ import { Copy, Check, Play, UserPlus, Sparkles, Crown, Users, RefreshCw, AlertCi
 import { Encuentro, User } from '../types';
 import { startGame, addSampleBots, updateEncuentroSettings } from '../services/gameService';
 import { sounds } from '../utils/audio';
+import { copyToClipboard } from '../utils/clipboard';
 
 interface LobbyProps {
   encuentro: Encuentro;
@@ -21,26 +22,30 @@ export const Lobby: React.FC<LobbyProps> = ({
   const [isAddingBots, setIsAddingBots] = useState(false);
   const isHost = encuentro.hostId === currentUser.id;
 
-  const handleCopyCode = () => {
-    navigator.clipboard.writeText(encuentro.code);
-    setCopiedCode(true);
-    sounds.playSuccess();
-    setTimeout(() => setCopiedCode(false), 2000);
+  const handleCopyCode = async () => {
+    const ok = await copyToClipboard(encuentro.code);
+    if (ok) {
+      setCopiedCode(true);
+      sounds.playSuccess();
+      setTimeout(() => setCopiedCode(false), 2000);
+    }
   };
 
-  const handleCopyLink = () => {
+  const handleCopyLink = async () => {
     const inviteUrl = `${window.location.origin}/?code=${encuentro.code}`;
-    navigator.clipboard.writeText(inviteUrl);
-    setCopiedLink(true);
-    sounds.playSuccess();
-    setTimeout(() => setCopiedLink(false), 2500);
+    const ok = await copyToClipboard(inviteUrl);
+    if (ok) {
+      setCopiedLink(true);
+      sounds.playSuccess();
+      setTimeout(() => setCopiedLink(false), 2500);
+    }
   };
 
   const handleAddBots = async () => {
     setIsAddingBots(true);
     sounds.playPop();
     try {
-      const updated = await addSampleBots(encuentro.id);
+      const updated = await addSampleBots(encuentro.code || encuentro.id);
       if (updated) {
         sounds.playSuccess();
         onEncuentroUpdated(updated);
@@ -60,7 +65,7 @@ export const Lobby: React.FC<LobbyProps> = ({
     setIsStarting(true);
     sounds.playFanfare();
     try {
-      const updated = await startGame(encuentro.id);
+      const updated = await startGame(encuentro.code || encuentro.id);
       if (updated) {
         onEncuentroUpdated(updated);
       }
@@ -259,7 +264,7 @@ export const Lobby: React.FC<LobbyProps> = ({
                     value={encuentro.guessWhoPercentage ?? 70}
                     onChange={e => {
                       const val = Number(e.target.value);
-                      const updated = updateEncuentroSettings(encuentro.id, { guessWhoPercentage: val });
+                      const updated = updateEncuentroSettings(encuentro.code || encuentro.id, { guessWhoPercentage: val });
                       if (updated) onEncuentroUpdated(updated);
                     }}
                     className="w-full accent-[#ff007a] cursor-pointer h-2 bg-purple-950 rounded-lg"
@@ -278,7 +283,7 @@ export const Lobby: React.FC<LobbyProps> = ({
                       type="button"
                       onClick={() => {
                         sounds.playPop();
-                        const updated = updateEncuentroSettings(encuentro.id, { guessWhoPercentage: preset.pct });
+                        const updated = updateEncuentroSettings(encuentro.code || encuentro.id, { guessWhoPercentage: preset.pct });
                         if (updated) onEncuentroUpdated(updated);
                       }}
                       className={`py-1.5 px-2 rounded-xl text-center text-xs font-bold border transition ${

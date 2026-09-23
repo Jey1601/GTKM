@@ -1,1 +1,72 @@
 @import "tailwindcss";
+
+:root {
+  --sat: env(safe-area-inset-top, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  overscroll-behavior-y: none;
+}
+
+body {
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Prevent auto-zooming on inputs and selects on iOS Safari / Chrome / Brave */
+@media screen and (max-width: 768px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
+/* Cross-browser input resets for Safari iOS, Brave, Firefox */
+input,
+button,
+textarea,
+select {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  font-family: inherit;
+}
+
+/* Safe area padding utilities for mobile notches and bottom home indicator */
+.pt-safe {
+  padding-top: max(0.75rem, env(safe-area-inset-top, 0px));
+}
+
+.pb-safe {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+}
+
+.pl-safe {
+  padding-left: max(0.75rem, env(safe-area-inset-left, 0px));
+}
+
+.pr-safe {
+  padding-right: max(0.75rem, env(safe-area-inset-right, 0px));
+}
+
+/* Fix iOS dynamic viewport height (100dvh support with 100vh fallback) */
+.min-h-screen-dynamic {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+/* Prevent canvas selection/dragging quirks on iOS Safari & Chrome Mobile */
+canvas {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}

@@ -57,7 +57,7 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
 
   const handleGoToHistory = () => {
     sounds.playPop();
-    const updated = viewEncuentroHistory(encuentro.id);
+    const updated = viewEncuentroHistory(encuentro.code || encuentro.id);
     if (updated) {
       onEncuentroUpdated(updated);
     }
@@ -65,7 +65,7 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
 
   const handlePlayAgain = async () => {
     sounds.playSuccess();
-    const updated = await restartEncuentroGame(encuentro.id);
+    const updated = await restartEncuentroGame(encuentro.code || encuentro.id);
     if (updated) {
       onEncuentroUpdated(updated);
     }
