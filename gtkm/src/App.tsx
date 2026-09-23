@@ -13,10 +13,12 @@ import {
   getEncuentro, 
   joinEncuentro,
   subscribeToEncuentroUpdates, 
+  syncEncuentroNow,
   getAllUsers,
   seedInitialHistoryIfEmpty
 } from './services/gameService';
 import { createCuteAvatarSvg } from './utils/mockAvatars';
+import { sounds } from './utils/audio';
 import { Navbar } from './components/Navbar';
 import { AuthScreen } from './components/AuthScreen';
 import { AvatarCanvas } from './components/AvatarCanvas';
@@ -38,6 +40,7 @@ export default function App() {
   const [currentEncuentro, setCurrentEncuentro] = useState<Encuentro | null>(null);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [isViewingHistory, setIsViewingHistory] = useState(false);
+  const [isSyncingEncuentro, setIsSyncingEncuentro] = useState(false);
 
   // Inicialización en montaje: capturar invitación de URL y sembrar datos de prueba
   useEffect(() => {
@@ -149,6 +152,25 @@ export default function App() {
     setCurrentEncuentro(updated);
   };
 
+  // Forzar sincronización manual bajo demanda (botón "Actualizar" en la Navbar)
+  // Complementa la sincronización en tiempo real (onSnapshot + BroadcastChannel + polling)
+  // como respaldo inmediato sin recargar ni salir de la sala/pantalla actual.
+  const handleManualSync = async () => {
+    if (!currentEncuentro?.code || isSyncingEncuentro) return;
+    setIsSyncingEncuentro(true);
+    sounds.playPop();
+    try {
+      const fresh = await syncEncuentroNow(currentEncuentro.code);
+      if (fresh) {
+        setCurrentEncuentro(fresh);
+      }
+    } catch (e) {
+      console.warn('Error al sincronizar manualmente el encuentro:', e);
+    } finally {
+      setIsSyncingEncuentro(false);
+    }
+  };
+
   return (
     <div className="min-h-screen min-h-screen-dynamic bg-[#120e28] text-white flex flex-col font-sans selection:bg-[#ff007a] selection:text-white relative overflow-x-hidden">
       {/* Background ambient lighting effects */}
@@ -163,6 +185,8 @@ export default function App() {
         onEditAvatar={() => setShowProfileModal(true)}
         onLogout={handleLogout}
         onLeaveEncuentro={currentEncuentro ? handleLeaveEncuentro : undefined}
+        onSyncEncuentro={currentEncuentro ? handleManualSync : undefined}
+        isSyncing={isSyncingEncuentro}
         onOpenHistory={() => {
           setCurrentEncuentro(null);
           setIsViewingHistory(true);
